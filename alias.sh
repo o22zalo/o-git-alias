@@ -420,6 +420,8 @@ function opushforce() {
         if [[ -n "$file_msg" ]]; then
             echo "[opushforce] Dùng message từ $msg_file"
             git commit -m "$file_msg" --allow-empty --allow-empty-message
+            true > "$msg_file"
+            echo "[opushforce] Đã clear nội dung $msg_file"
         else
             # Ưu tiên 3: auto-gen từ git status
             commitstatus
