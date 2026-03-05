@@ -402,10 +402,28 @@ function oclone() {
 # force push lên o.url chính + tất cả o.url0 .. o.url9
 function opushforce() {
     git add -A
+
     if [[ -n "$1" ]]; then
+        # Ưu tiên 1: message từ arg
         git commit -m "$1" --allow-empty --allow-empty-message
     else
-        commitstatus
+        # Ưu tiên 2: message từ file .opushforce.message trong cwd
+        local msg_file=".opushforce.message"
+        local file_msg=""
+        if [[ -f "$msg_file" ]]; then
+            file_msg=$(cat "$msg_file")
+            # Trim whitespace đầu/cuối
+            file_msg="${file_msg#"${file_msg%%[![:space:]]*}"}"
+            file_msg="${file_msg%"${file_msg##*[![:space:]]}"}"
+        fi
+
+        if [[ -n "$file_msg" ]]; then
+            echo "[opushforce] Dùng message từ $msg_file"
+            git commit -m "$file_msg" --allow-empty --allow-empty-message
+        else
+            # Ưu tiên 3: auto-gen từ git status
+            commitstatus
+        fi
     fi
 
     local url; url=$(_o_get_url) || return 1
@@ -512,6 +530,6 @@ function oinit() {
 
     if [[ "$remote_url" == "oremoteUrl" ]]; then
         echo "[oinit]   Hãy cập nhật remote URL:"
-        echo "[oinit]   git config o.url https://github.com/org/repo.git"
+        echo "[oinit]   git config o.url https://github.com/myorg/myrepo.git"
     fi
 }
