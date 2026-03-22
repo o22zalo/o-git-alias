@@ -3,29 +3,42 @@
 # modules/ocreateremote.sh — Tạo remote repo qua REST API của provider
 # Được load tự động bởi alias.sh — KHÔNG source trực tiếp file này
 #
-# Phụ thuộc (inject từ alias.sh trước khi source file này):
+# Phụ thuộc (inject từ alias.sh trước khi source):
 #   _O_SCRIPT_DIR   — thư mục gốc của alias.sh
 #   O_CONFIG_FILE   — đường dẫn đến .git-o-config
 #   _o_resolve_auth — hàm resolve auth từ .git-o-config
 #
-# Providers hỗ trợ:
-#   github.com, gitlab.com, gitlab self-hosted (hostname chứa "gitlab"),
-#   dev.azure.com, gitea.*, forgejo.*, bitbucket.org
+# Flow (interactive wizard):
+#   1. Đọc .git-o-config → list tất cả [section] → menu chọn provider/account
+#   2. Hỏi repo name     (default: tên thư mục hiện tại)
+#   3. Hỏi visibility    (default: private)
+#   4. Hỏi description   (default: rỗng, tùy chọn)
+#   5. Confirm summary   → gọi API
+#   6. Lưu URL vào .git/config: o.url nếu chưa có, không thì o.url0..o.url9
 # =============================================================================
 
-# ---------------------------------------------------------------------------
-# Guard: ngăn source lại khi đã load (idempotent)
-# ---------------------------------------------------------------------------
 [[ -n "${_O_MODULE_CREATEREMOTE_LOADED:-}" ]] && return 0
 _O_MODULE_CREATEREMOTE_LOADED=1
 
 # ---------------------------------------------------------------------------
+# HELPER: Đọc .git-o-config → in danh sách section name (mỗi dòng 1 cái)
+# ---------------------------------------------------------------------------
+function _o_list_config_sections() {
+    [[ ! -f "$O_CONFIG_FILE" ]] && return 0
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%%$'\r'}"                           # strip CR
+        line="${line#"${line%%[![:space:]]*}"}"         # trim leading
+        line="${line%"${line##*[![:space:]]}"}"         # trim trailing
+        [[ "$line" =~ ^\[(.+)\]$ ]] && echo "${BASH_REMATCH[1]}"
+    done < "$O_CONFIG_FILE"
+}
+
+# ---------------------------------------------------------------------------
 # HELPER: Detect provider từ hostname
-# Output: "github" | "gitlab" | "azure" | "gitea" | "forgejo" | "bitbucket" | "unknown"
 # ---------------------------------------------------------------------------
 function _o_detect_provider() {
-    local h="${1,,}"   # lowercase toàn bộ host
-
+    local h="${1,,}"
     if   [[ "$h" == *"github.com"* ]];    then echo "github"
     elif [[ "$h" == *"dev.azure.com"* ]]; then echo "azure"
     elif [[ "$h" == *"bitbucket.org"* ]]; then echo "bitbucket"
@@ -37,43 +50,77 @@ function _o_detect_provider() {
 }
 
 # ---------------------------------------------------------------------------
-# HELPER: Parse URL → set biến _O_HOST, _O_OWNER, _O_REPO_PATH_RAW
-#
-# Input : https://github.com/myorg/myrepo.git
-# Output: _O_HOST="github.com"  _O_OWNER="myorg"  _O_REPO_PATH_RAW="/myorg/myrepo.git"
+# HELPER: Tên đẹp của provider để hiển thị
 # ---------------------------------------------------------------------------
-function _o_parse_url() {
-    local url="$1"
-    _O_HOST=""
-    _O_OWNER=""
-    _O_REPO_PATH_RAW=""
+function _o_provider_label() {
+    case "$(_o_detect_provider "$1")" in
+        github)    echo "GitHub" ;;
+        gitlab)    echo "GitLab" ;;
+        azure)     echo "Azure DevOps" ;;
+        gitea)     echo "Gitea" ;;
+        forgejo)   echo "Forgejo" ;;
+        bitbucket) echo "Bitbucket" ;;
+        *)         echo "Unknown" ;;
+    esac
+}
 
-    # Bỏ qua phần user:pass@ trước host nếu có (URL đã embed token)
-    if [[ "$url" =~ ^https?://([^/@]+@)?([^/]+)(/.*)$ ]]; then
-        _O_HOST="${BASH_REMATCH[2]}"
-        _O_REPO_PATH_RAW="${BASH_REMATCH[3]}"
-        if [[ "$_O_REPO_PATH_RAW" =~ ^/([^/]+)/ ]]; then
-            _O_OWNER="${BASH_REMATCH[1]}"
-        fi
+# ---------------------------------------------------------------------------
+# HELPER: Parse "host/owner" từ section name → set _O_HOST, _O_OWNER
+# ---------------------------------------------------------------------------
+function _o_parse_section() {
+    local section="$1"
+    if [[ "$section" =~ ^([^/]+)/(.+)$ ]]; then
+        _O_HOST="${BASH_REMATCH[1]}"
+        # Lấy phần đầu tiên làm owner (Azure có thể là org/project)
+        local rest="${BASH_REMATCH[2]}"
+        _O_OWNER="${rest%%/*}"
+    else
+        _O_HOST="$section"
+        _O_OWNER=""
     fi
 }
 
 # ---------------------------------------------------------------------------
-# HELPER: Gọi curl API với Authorization header đúng theo provider
-#
-# Usage  : _o_curl_api <METHOD> <api_url> <json_body> [dry_run=0]
+# HELPER: Parse URL → set _O_HOST, _O_OWNER, _O_REPO_PATH_RAW
+# ---------------------------------------------------------------------------
+function _o_parse_url() {
+    local url="$1"
+    _O_HOST="" _O_OWNER="" _O_REPO_PATH_RAW=""
+    if [[ "$url" =~ ^https?://([^/@]+@)?([^/]+)(/.*)$ ]]; then
+        _O_HOST="${BASH_REMATCH[2]}"
+        _O_REPO_PATH_RAW="${BASH_REMATCH[3]}"
+        [[ "$_O_REPO_PATH_RAW" =~ ^/([^/]+)/ ]] && _O_OWNER="${BASH_REMATCH[1]}"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Tìm slot o.url trống tiếp theo
+# Thứ tự: o.url → o.url0 → o.url1 → ... → o.url9
+# Output: key (VD: "o.url", "o.url3") hoặc "" nếu hết slot
+# ---------------------------------------------------------------------------
+function _o_next_url_slot() {
+    local existing
+    existing=$(git config --get o.url 2>/dev/null || true)
+    [[ -z "$existing" ]] && echo "o.url" && return 0
+
+    local i
+    for i in $(seq 0 9); do
+        existing=$(git config --get "o.url${i}" 2>/dev/null || true)
+        [[ -z "$existing" ]] && echo "o.url${i}" && return 0
+    done
+    echo ""
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Gọi curl API với auth header đúng theo provider
 # Requires: O_AUTH_TYPE, O_AUTH_TOKEN, O_AUTH_USER, O_AUTH_HEADER, _O_HOST
 # ---------------------------------------------------------------------------
 function _o_curl_api() {
-    local method="$1"
-    local api_url="$2"
-    local body="$3"
-    local dry_run="${4:-0}"
+    local method="$1" api_url="$2" body="$3" dry_run="${4:-0}"
 
     local provider
     provider=$(_o_detect_provider "$_O_HOST")
 
-    # Map token → Authorization header theo từng provider
     local auth_header=""
     case "$O_AUTH_TYPE" in
         token)
@@ -85,23 +132,19 @@ function _o_curl_api() {
                 bitbucket) auth_header="Authorization: Basic $(printf '%s' "${O_AUTH_USER}:${O_AUTH_TOKEN}" | base64 -w0)" ;;
                 azure)     auth_header="Authorization: Basic $(printf '%s' ":${O_AUTH_TOKEN}" | base64 -w0)" ;;
                 *)         auth_header="Authorization: Bearer ${O_AUTH_TOKEN}" ;;
-            esac
-            ;;
+            esac ;;
         header)
-            # Dùng thẳng header đã khai báo trong .git-o-config
-            auth_header="$O_AUTH_HEADER"
-            ;;
+            auth_header="$O_AUTH_HEADER" ;;
         none|*)
-            echo "[ocreateremote] WARN: Không có auth — gọi API không xác thực" >&2
-            ;;
+            echo "  WARN: Không có auth — gọi API không xác thực" >&2 ;;
     esac
 
     if [[ "$dry_run" == "1" ]]; then
-        echo "[dry-run] curl -s -X $method \\"
-        echo "  -H 'Content-Type: application/json' \\"
-        [[ -n "$auth_header" ]] && echo "  -H '${auth_header}' \\"
-        echo "  -d '${body}' \\"
-        echo "  '${api_url}'"
+        echo "  [dry-run] curl -s -X $method \\"
+        echo "    -H 'Content-Type: application/json' \\"
+        [[ -n "$auth_header" ]] && echo "    -H '${auth_header//${O_AUTH_TOKEN:-__NO__}/***}' \\"
+        echo "    -d '${body}' \\"
+        echo "    '${api_url}'"
         return 0
     fi
 
@@ -120,14 +163,12 @@ function _o_curl_api() {
 }
 
 # ---------------------------------------------------------------------------
-# HELPER: Kiểm tra response JSON, in kết quả, offer set o.url
+# HELPER: Kiểm tra response → lưu URL vào slot o.url tiếp theo
 # ---------------------------------------------------------------------------
-function _o_create_check_response() {
-    local resp="$1"
-    local detected_url="$2"   # URL clone lấy từ JSON response
-    local fallback_url="$3"   # URL dự đoán nếu parse thất bại
+function _o_save_result() {
+    local resp="$1" detected_url="$2" fallback_url="$3"
 
-    # Trích thông báo lỗi phổ biến từ JSON
+    # Trích lỗi từ JSON
     local err_msg=""
     if echo "$resp" | grep -q '"message"'; then
         err_msg=$(echo "$resp" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -137,45 +178,44 @@ function _o_create_check_response() {
     fi
 
     if [[ -n "$detected_url" ]]; then
+        local slot
+        slot=$(_o_next_url_slot)
         echo ""
-        echo "[ocreateremote] ✓ Repo đã tạo thành công!"
-        echo "[ocreateremote]   Clone URL: $detected_url"
-        echo ""
-        # Offer set o.url nếu đang trong git repo
-        if git rev-parse --git-dir &>/dev/null 2>&1; then
-            read -r -p "[ocreateremote] Set o.url = $detected_url cho repo này? [Y/n] " yn
-            yn="${yn:-Y}"
-            if [[ "${yn,,}" == "y" ]]; then
-                git config o.url "$detected_url"
-                echo "[ocreateremote] ✓ o.url đã được set. Chạy ngay: git opush"
+        echo "  ✓ Tạo repo thành công!"
+        echo "  ✓ Clone URL : $detected_url"
+        if [[ -n "$slot" ]]; then
+            git config "$slot" "$detected_url"
+            echo "  ✓ Đã lưu   : $slot  →  $detected_url"
+            echo ""
+            if [[ "$slot" == "o.url" ]]; then
+                echo "  Bước tiếp: git opush"
+            else
+                echo "  Bước tiếp: git opushforce   (push tất cả remote)"
             fi
+        else
+            echo "  ⚠ Hết slot (o.url~o.url9). Set thủ công nếu cần." >&2
         fi
+        return 0
     else
+        echo ""
+        echo "  ✗ Tạo repo thất bại." >&2
+        [[ -n "$err_msg" ]]     && echo "  ✗ Lỗi API  : $err_msg" >&2
+        [[ -n "$fallback_url" ]] && echo "  ✗ URL dự kiến (chưa verify): $fallback_url" >&2
         echo "" >&2
-        echo "[ocreateremote] ✗ Tạo repo thất bại." >&2
-        [[ -n "$err_msg" ]] && echo "[ocreateremote]   Lỗi API: $err_msg" >&2
-        echo "" >&2
-        echo "[ocreateremote]   Raw response:" >&2
-        echo "$resp" >&2
-        echo "" >&2
-        echo "[ocreateremote]   Fallback URL (chưa verify): $fallback_url" >&2
+        echo "  Response:" >&2
+        echo "$resp" | head -20 >&2
         return 1
     fi
 }
 
 # ---------------------------------------------------------------------------
 # PROVIDER: GitHub
-# POST /orgs/{org}/repos  →  fallback POST /user/repos
-# Docs: https://docs.github.com/en/rest/repos/repos#create-an-organization-repository
 # ---------------------------------------------------------------------------
 function _o_create_github() {
     local host="$1" owner="$2" repo_name="$3" desc="$4" is_private="$5" dry_run="$6"
-
     local body
     body=$(printf '{"name":"%s","description":"%s","private":%s,"auto_init":false}' \
         "$repo_name" "$desc" "$is_private")
-
-    echo "[ocreateremote] GitHub | Owner: $owner | Repo: $repo_name" >&2
 
     local resp
     resp=$(_o_curl_api POST "https://api.github.com/orgs/${owner}/repos" "$body" "$dry_run")
@@ -183,29 +223,21 @@ function _o_create_github() {
 
     local html_url
     html_url=$(echo "$resp" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-
-    # Fallback: tạo trong user account nếu owner không phải org
     if [[ -z "$html_url" ]]; then
-        echo "[ocreateremote] Thử /user/repos (personal account)..." >&2
-        resp=$(_o_curl_api POST "https://api.github.com/user/repos" "$body" "$dry_run")
+        resp=$(_o_curl_api POST "https://api.github.com/user/repos" "$body")
         html_url=$(echo "$resp" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
 
     local clone_url=""
     [[ -n "$html_url" ]] && clone_url="${html_url}.git"
-
-    _o_create_check_response "$resp" "$clone_url" \
-        "https://github.com/${owner}/${repo_name}.git"
+    _o_save_result "$resp" "$clone_url" "https://github.com/${owner}/${repo_name}.git"
 }
 
 # ---------------------------------------------------------------------------
-# PROVIDER: GitLab (cloud + self-hosted)
-# POST /api/v4/projects
-# Docs: https://docs.gitlab.com/ee/api/projects.html#create-project
+# PROVIDER: GitLab
 # ---------------------------------------------------------------------------
 function _o_create_gitlab() {
     local host="$1" owner="$2" repo_name="$3" desc="$4" is_private="$5" dry_run="$6"
-
     local visibility
     [[ "$is_private" == "true" ]] && visibility="private" || visibility="public"
 
@@ -213,33 +245,23 @@ function _o_create_gitlab() {
     body=$(printf '{"name":"%s","description":"%s","visibility":"%s","namespace_path":"%s","initialize_with_readme":false}' \
         "$repo_name" "$desc" "$visibility" "$owner")
 
-    echo "[ocreateremote] GitLab ($host) | Namespace: $owner | Repo: $repo_name" >&2
-
     local resp
     resp=$(_o_curl_api POST "https://${host}/api/v4/projects" "$body" "$dry_run")
     [[ "$dry_run" == "1" ]] && return 0
 
     local clone_url
     clone_url=$(echo "$resp" | grep -o '"http_url_to_repo":"[^"]*"' | head -1 | cut -d'"' -f4)
-
-    _o_create_check_response "$resp" "$clone_url" \
-        "https://${host}/${owner}/${repo_name}.git"
+    _o_save_result "$resp" "$clone_url" "https://${host}/${owner}/${repo_name}.git"
 }
 
 # ---------------------------------------------------------------------------
-# PROVIDER: Gitea + Forgejo (API tương thích nhau)
-# POST /api/v1/orgs/{org}/repos  →  fallback POST /api/v1/user/repos
-# Docs: https://gitea.com/api/swagger
+# PROVIDER: Gitea / Forgejo
 # ---------------------------------------------------------------------------
 function _o_create_gitea() {
     local host="$1" owner="$2" repo_name="$3" desc="$4" is_private="$5" dry_run="$6"
-    local provider_label="${7:-Gitea}"
-
     local body
     body=$(printf '{"name":"%s","description":"%s","private":%s,"auto_init":false}' \
         "$repo_name" "$desc" "$is_private")
-
-    echo "[ocreateremote] $provider_label ($host) | Owner: $owner | Repo: $repo_name" >&2
 
     local resp
     resp=$(_o_curl_api POST "https://${host}/api/v1/orgs/${owner}/repos" "$body" "$dry_run")
@@ -247,257 +269,239 @@ function _o_create_gitea() {
 
     local clone_url
     clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-
     if [[ -z "$clone_url" ]]; then
-        echo "[ocreateremote] Thử /api/v1/user/repos (personal account)..." >&2
-        resp=$(_o_curl_api POST "https://${host}/api/v1/user/repos" "$body" "$dry_run")
+        resp=$(_o_curl_api POST "https://${host}/api/v1/user/repos" "$body")
         clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
-
-    _o_create_check_response "$resp" "$clone_url" \
-        "https://${host}/${owner}/${repo_name}.git"
+    _o_save_result "$resp" "$clone_url" "https://${host}/${owner}/${repo_name}.git"
 }
 
 # ---------------------------------------------------------------------------
-# PROVIDER: Bitbucket Cloud
-# POST /2.0/repositories/{workspace}/{repo_slug}
-# Docs: https://developer.atlassian.com/cloud/bitbucket/rest/api-group-repositories
+# PROVIDER: Bitbucket
 # ---------------------------------------------------------------------------
 function _o_create_bitbucket() {
     local host="$1" owner="$2" repo_name="$3" desc="$4" is_private="$5" dry_run="$6"
-
-    # Bitbucket slug: lowercase
     local slug="${repo_name,,}"
-
     local body
     body=$(printf '{"scm":"git","name":"%s","description":"%s","is_private":%s}' \
         "$repo_name" "$desc" "$is_private")
-
-    echo "[ocreateremote] Bitbucket | Workspace: $owner | Repo: $slug" >&2
 
     local resp
     resp=$(_o_curl_api POST "https://api.bitbucket.org/2.0/repositories/${owner}/${slug}" "$body" "$dry_run")
     [[ "$dry_run" == "1" ]] && return 0
 
-    # Response trả về links.clone array — lấy href có scheme https
     local clone_url
     clone_url=$(echo "$resp" | grep -o '"href":"https://[^"]*\.git"' | head -1 | cut -d'"' -f4)
-
-    _o_create_check_response "$resp" "$clone_url" \
-        "https://bitbucket.org/${owner}/${slug}.git"
+    _o_save_result "$resp" "$clone_url" "https://bitbucket.org/${owner}/${slug}.git"
 }
 
 # ---------------------------------------------------------------------------
 # PROVIDER: Azure DevOps
-# POST /{org}/{project}/_apis/git/repositories?api-version=7.1
-# Docs: https://learn.microsoft.com/en-us/rest/api/azure/devops/git/repositories/create
-# Lưu ý: Azure không quản lý public/private ở cấp repo (quản lý qua Project)
 # ---------------------------------------------------------------------------
 function _o_create_azure() {
-    local host="$1" owner="$2" repo_name="$3" desc="$4" is_private="$5" dry_run="$6"
-
-    # Trích org và project từ _O_REPO_PATH_RAW
-    # Format: /{org}/{project}/_git/{repo}
-    local org="$owner"
-    local project=""
-    if [[ "$_O_REPO_PATH_RAW" =~ ^/([^/]+)/([^/]+)/_git ]]; then
-        org="${BASH_REMATCH[1]}"
-        project="${BASH_REMATCH[2]}"
-    fi
-
-    if [[ -z "$project" ]]; then
-        echo "[ocreateremote] ERROR: Azure DevOps cần project name." >&2
-        echo "[ocreateremote]   Thêm --project <tên> khi gọi lệnh, hoặc đảm bảo o.url có dạng:" >&2
-        echo "[ocreateremote]   https://dev.azure.com/{org}/{project}/_git/{repo}" >&2
-        return 1
-    fi
-
-    if [[ "$is_private" == "false" ]]; then
-        echo "[ocreateremote] INFO: Azure DevOps không hỗ trợ public repo qua API." >&2
-        echo "[ocreateremote]   Visibility được quản lý ở cấp Project trên portal." >&2
-    fi
-
+    local host="$1" owner="$2" repo_name="$3" desc="$4" is_private="$5" dry_run="$6" azure_project="$7"
     local body
     body=$(printf '{"name":"%s"}' "$repo_name")
 
-    echo "[ocreateremote] Azure DevOps | Org: $org | Project: $project | Repo: $repo_name" >&2
-
     local resp
     resp=$(_o_curl_api POST \
-        "https://dev.azure.com/${org}/${project}/_apis/git/repositories?api-version=7.1" \
+        "https://dev.azure.com/${owner}/${azure_project}/_apis/git/repositories?api-version=7.1" \
         "$body" "$dry_run")
     [[ "$dry_run" == "1" ]] && return 0
 
     local remote_url
     remote_url=$(echo "$resp" | grep -o '"remoteUrl":"[^"]*"' | head -1 | cut -d'"' -f4)
-
-    _o_create_check_response "$resp" "$remote_url" \
-        "https://dev.azure.com/${org}/${project}/_git/${repo_name}"
+    _o_save_result "$resp" "$remote_url" \
+        "https://dev.azure.com/${owner}/${azure_project}/_git/${repo_name}"
 }
 
-# ---------------------------------------------------------------------------
-# PUBLIC: ocreateremote — Entry point chính
+# =============================================================================
+# PUBLIC: ocreateremote — Interactive wizard
 #
-# Cú pháp: git ocreateremote [OPTIONS]
+# Cú pháp: git ocreateremote [--dry-run]
 #
-# OPTIONS:
-#   --public              Tạo repo public (mặc định: private)
-#   --private             Tạo repo private (mặc định, có thể bỏ qua)
-#   --name  <tên>         Tên repo (mặc định: lấy từ o.url, fallback: tên CWD)
-#   --desc  <text>        Mô tả repo
-#   --url   <url>         Override o.url để chỉ định provider/owner
-#   --project <tên>       Tên project — chỉ dùng cho Azure DevOps
-#   --dry-run             In lệnh curl, không gọi API thật
-#   -h, --help            Hiện help
-# ---------------------------------------------------------------------------
+# Wizard hỏi lần lượt:
+#   1. Chọn provider/account (từ .git-o-config)
+#   2. Tên repo              (default: tên thư mục hiện tại)
+#   3. Visibility            (default: private)
+#   4. Mô tả                 (optional)
+#   5. Confirm → tạo → tự lưu URL vào o.url / o.url0..9
+# =============================================================================
 function ocreateremote() {
-    # ── Parse arguments ──────────────────────────────────────────────────────
-    local is_private="true"
-    local repo_name=""
-    local description=""
-    local override_url=""
     local dry_run="0"
-    local azure_project=""
+    [[ "${1:-}" == "--dry-run" ]] && dry_run="1"
 
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --public)             is_private="false"; shift ;;
-            --private)            is_private="true";  shift ;;
-            --name)               repo_name="$2";     shift 2 ;;
-            --desc|--description) description="$2";   shift 2 ;;
-            --url)                override_url="$2";  shift 2 ;;
-            --project)            azure_project="$2"; shift 2 ;;
-            --dry-run)            dry_run="1";        shift ;;
-            -h|--help)
-                echo ""
-                echo "Cú pháp: git ocreateremote [OPTIONS]"
-                echo ""
-                echo "OPTIONS:"
-                echo "  --public              Tạo repo public (mặc định: private)"
-                echo "  --private             Tạo repo private (có thể bỏ qua)"
-                echo "  --name  <tên>         Tên repo (mặc định: lấy từ o.url hoặc tên CWD)"
-                echo "  --desc  <text>        Mô tả repo"
-                echo "  --url   <url>         Override o.url để chỉ định provider/owner"
-                echo "  --project <tên>       Project name (chỉ Azure DevOps)"
-                echo "  --dry-run             In curl command, không gọi API thật"
-                echo ""
-                echo "Providers: github.com, gitlab.com, gitlab self-hosted,"
-                echo "           dev.azure.com, gitea.*, forgejo.*, bitbucket.org"
-                echo ""
-                echo "Ví dụ:"
-                echo "  git ocreateremote"
-                echo "  git ocreateremote --public"
-                echo "  git ocreateremote --name my-lib --desc 'Thư viện dùng chung'"
-                echo "  git ocreateremote --url https://github.com/myorg/newrepo.git --public"
-                echo "  git ocreateremote --dry-run"
-                echo ""
-                return 0
-                ;;
-            *)
-                echo "[ocreateremote] WARN: Option không nhận ra: '$1' (bỏ qua)" >&2
-                shift
-                ;;
-        esac
-    done
-
-    # ── Xác định target URL ──────────────────────────────────────────────────
-    local target_url
-    if [[ -n "$override_url" ]]; then
-        target_url="$override_url"
-    else
-        target_url=$(git config --get o.url 2>/dev/null || true)
-        if [[ -z "$target_url" ]]; then
-            echo "[ocreateremote] ERROR: Chưa set o.url và không có --url." >&2
-            echo "[ocreateremote]   Gợi ý:" >&2
-            echo "[ocreateremote]     git config o.url https://github.com/myorg/newrepo.git" >&2
-            echo "[ocreateremote]     git ocreateremote --url https://github.com/myorg/newrepo.git" >&2
-            return 1
-        fi
-    fi
-
-    # ── Parse URL → _O_HOST, _O_OWNER, _O_REPO_PATH_RAW ─────────────────────
-    _o_parse_url "$target_url"
-
-    if [[ -z "$_O_HOST" ]]; then
-        echo "[ocreateremote] ERROR: Không parse được host từ URL: $target_url" >&2
+    # ── Kiểm tra môi trường ───────────────────────────────────────────────────
+    if ! git rev-parse --git-dir &>/dev/null 2>&1; then
+        echo "[ocreateremote] ERROR: Không phải git repo. Chạy 'git oinit' trước." >&2
         return 1
     fi
 
-    # ── Inject azure_project nếu user truyền --project ───────────────────────
-    if [[ -n "$azure_project" ]]; then
-        _O_REPO_PATH_RAW="/${_O_OWNER}/${azure_project}/_git/__placeholder__"
+    if [[ ! -f "$O_CONFIG_FILE" ]]; then
+        echo "[ocreateremote] ERROR: Không tìm thấy: $O_CONFIG_FILE" >&2
+        echo "[ocreateremote]   Tạo từ mẫu: cp .git-o-config.example .git-o-config" >&2
+        return 1
     fi
 
-    # ── Xác định tên repo ─────────────────────────────────────────────────────
-    if [[ -z "$repo_name" ]]; then
-        local url_repo_name
-        url_repo_name=$(basename "$target_url" .git)
-        local cwd_name
-        cwd_name=$(basename "$PWD")
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 1 — Chọn provider / account
+    # ─────────────────────────────────────────────────────────────────────────
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────"
+    echo "  │  git ocreateremote${dry_run:+ (dry-run)}"
+    echo "  └─────────────────────────────────────────────────"
+    echo ""
 
-        # Fallback sang tên CWD nếu URL còn là placeholder
-        local invalid_names=("oremoteUrl" "__placeholder__" "" "$_O_HOST")
-        local use_cwd=0
-        for inv in "${invalid_names[@]}"; do
-            [[ "$url_repo_name" == "$inv" ]] && use_cwd=1 && break
-        done
+    local -a sections=()
+    while IFS= read -r sec; do
+        [[ -n "$sec" ]] && sections+=("$sec")
+    done < <(_o_list_config_sections)
 
-        repo_name=$( [[ "$use_cwd" == "1" ]] && echo "$cwd_name" || echo "$url_repo_name" )
+    if [[ ${#sections[@]} -eq 0 ]]; then
+        echo "  ERROR: Không có provider nào trong: $O_CONFIG_FILE" >&2
+        echo "  Thêm section ví dụ:" >&2
+        echo "    [github.com/myorg]" >&2
+        echo "    token=ghp_xxxx" >&2
+        return 1
     fi
 
-    # Sanitize: lowercase, space → gạch ngang
-    repo_name="${repo_name,,}"
-    repo_name="${repo_name// /-}"
+    echo "  Chọn provider / account:"
+    echo ""
+    local i
+    for i in "${!sections[@]}"; do
+        local sec="${sections[$i]}"
+        local lbl
+        lbl=$(_o_provider_label "${sec%%/*}")
+        printf "    [%d] %-35s (%s)\n" "$((i+1))" "$sec" "$lbl"
+    done
+    echo ""
 
-    # ── Resolve auth (dùng hàm từ alias.sh) ──────────────────────────────────
-    _o_resolve_auth "$target_url"
+    local choice
+    while true; do
+        read -r -p "  Số thứ tự [1-${#sections[@]}]: " choice
+        [[ "$choice" =~ ^[0-9]+$ ]] \
+            && (( choice >= 1 && choice <= ${#sections[@]} )) \
+            && break
+        echo "  Nhập số từ 1 đến ${#sections[@]}."
+    done
 
-    if [[ "$O_AUTH_TYPE" == "none" ]]; then
-        echo "[ocreateremote] WARN: Không tìm thấy auth trong: $O_CONFIG_FILE" >&2
-    fi
+    local selected="${sections[$((choice-1))]}"
+    _o_parse_section "$selected"
 
-    # ── Detect provider ───────────────────────────────────────────────────────
+    # Resolve auth ngay để đọc header (dùng cho heuristic self-hosted)
+    _o_resolve_auth "https://${_O_HOST}/${_O_OWNER}"
+
     local provider
     provider=$(_o_detect_provider "$_O_HOST")
-
-    # Heuristic bổ sung cho self-hosted không rõ tên từ hostname
-    if [[ "$provider" == "unknown" && "$O_AUTH_TYPE" == "header" ]]; then
-        if [[ "$O_AUTH_HEADER" == *"glpat"* || "$O_AUTH_HEADER" == *"PRIVATE-TOKEN"* ]]; then
+    # Heuristic self-hosted không rõ tên từ hostname
+    if [[ "$provider" == "unknown" ]]; then
+        if   [[ "$O_AUTH_HEADER" == *"glpat"* || "$O_AUTH_HEADER" == *"PRIVATE-TOKEN"* ]]; then
             provider="gitlab"
         elif [[ "$O_AUTH_HEADER" == "Authorization: token "* ]]; then
             provider="gitea"
         fi
     fi
 
-    # ── Print summary ─────────────────────────────────────────────────────────
-    local vis_label
-    [[ "$is_private" == "true" ]] && vis_label="private 🔒" || vis_label="public 🌐"
-
+    local plabel
+    plabel=$(_o_provider_label "$_O_HOST")
     echo ""
-    echo "┌──────────────────────────────────────────────"
-    echo "│  git ocreateremote"
-    echo "├──────────────────────────────────────────────"
-    printf "│  Provider   : %s\n"   "$provider"
-    printf "│  Host       : %s\n"   "$_O_HOST"
-    printf "│  Owner/Org  : %s\n"   "$_O_OWNER"
-    printf "│  Repo name  : %s\n"   "$repo_name"
-    printf "│  Visibility : %s\n"   "$vis_label"
-    [[ -n "$description" ]] && printf "│  Desc       : %s\n" "$description"
-    printf "│  Auth       : %s @ [%s]\n" "$O_AUTH_TYPE" "$O_AUTH_MATCH"
-    [[ "$dry_run" == "1" ]] && printf "│  Mode       : DRY RUN\n"
-    echo "└──────────────────────────────────────────────"
-    echo ""
+    echo "  → Provider : $selected  ($plabel)"
 
-    if [[ "$dry_run" != "1" ]]; then
-        read -r -p "[ocreateremote] Xác nhận tạo repo? [Y/n] " confirm
-        confirm="${confirm:-Y}"
-        if [[ "${confirm,,}" != "y" ]]; then
-            echo "[ocreateremote] Hủy."
-            return 0
-        fi
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 2 — Tên repo
+    # ─────────────────────────────────────────────────────────────────────────
+    echo ""
+    local default_name
+    default_name="$(basename "$PWD")"
+    default_name="${default_name,,}"
+    default_name="${default_name// /-}"
+
+    local repo_name
+    read -r -p "  Tên repo [${default_name}]: " repo_name
+    repo_name="${repo_name:-$default_name}"
+    repo_name="${repo_name,,}"
+    repo_name="${repo_name// /-}"
+    echo "  → Tên repo : $repo_name"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 3 — Visibility
+    # ─────────────────────────────────────────────────────────────────────────
+    echo ""
+    local vis_input is_private
+    while true; do
+        read -r -p "  Visibility [private/public] (Enter = private): " vis_input
+        case "${vis_input:-private}" in
+            private|pri) is_private="true";  break ;;
+            public|pub)  is_private="false"; break ;;
+            *) echo "  Nhập 'private' hoặc 'public'." ;;
+        esac
+    done
+    local vlabel
+    [[ "$is_private" == "true" ]] && vlabel="private 🔒" || vlabel="public 🌐"
+    echo "  → Visibility: $vlabel"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 4 — Mô tả (optional)
+    # ─────────────────────────────────────────────────────────────────────────
+    echo ""
+    local description
+    read -r -p "  Mô tả (Enter để bỏ qua): " description
+    [[ -n "$description" ]] && echo "  → Mô tả    : $description"
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 4b — Azure: hỏi thêm project name
+    # ─────────────────────────────────────────────────────────────────────────
+    local azure_project=""
+    if [[ "$provider" == "azure" ]]; then
+        echo ""
+        while true; do
+            read -r -p "  Azure Project name: " azure_project
+            [[ -n "$azure_project" ]] && break
+            echo "  Azure DevOps cần project name."
+        done
+        echo "  → AZ Project: $azure_project"
     fi
 
-    # ── Dispatch sang provider handler ───────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 5 — Confirm summary
+    # ─────────────────────────────────────────────────────────────────────────
+    local next_slot
+    next_slot=$(_o_next_url_slot)
+
+    echo ""
+    echo "  ┌─────────────────────────────────────────────────"
+    echo "  │  Tóm tắt"
+    echo "  ├─────────────────────────────────────────────────"
+    printf "  │  Provider   : %s  (%s)\n"  "$selected" "$plabel"
+    printf "  │  Owner/Org  : %s\n"        "$_O_OWNER"
+    printf "  │  Repo name  : %s\n"        "$repo_name"
+    printf "  │  Visibility : %s\n"        "$vlabel"
+    [[ -n "$description" ]]   && printf "  │  Mô tả      : %s\n" "$description"
+    [[ -n "$azure_project" ]] && printf "  │  AZ Project : %s\n" "$azure_project"
+    printf "  │  Auth       : %s @ [%s]\n" "$O_AUTH_TYPE" "$O_AUTH_MATCH"
+    if [[ -n "$next_slot" ]]; then
+        printf "  │  Lưu vào    : %s  (trong .git/config)\n" "$next_slot"
+    else
+        printf "  │  Lưu vào    : ⚠ Hết slot (o.url ~ o.url9)\n"
+    fi
+    [[ "$dry_run" == "1" ]] && printf "  │  Mode       : DRY RUN — không gọi API thật\n"
+    echo "  └─────────────────────────────────────────────────"
+    echo ""
+
+    local confirm
+    read -r -p "  Xác nhận tạo repo? [Y/n]: " confirm
+    confirm="${confirm:-Y}"
+    if [[ "${confirm,,}" != "y" ]]; then
+        echo "  Hủy."
+        return 0
+    fi
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 6 — Gọi API provider
+    # ─────────────────────────────────────────────────────────────────────────
+    echo ""
+    echo "  Đang tạo repo..."
+
     case "$provider" in
         github)
             _o_create_github    "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run"
@@ -505,23 +509,19 @@ function ocreateremote() {
         gitlab)
             _o_create_gitlab    "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run"
             ;;
-        gitea)
-            _o_create_gitea     "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run" "Gitea"
-            ;;
-        forgejo)
-            _o_create_gitea     "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run" "Forgejo"
+        gitea|forgejo)
+            _o_create_gitea     "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run"
             ;;
         bitbucket)
             _o_create_bitbucket "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run"
             ;;
         azure)
-            _o_create_azure     "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run"
+            _o_create_azure     "$_O_HOST" "$_O_OWNER" "$repo_name" "$description" "$is_private" "$dry_run" "$azure_project"
             ;;
         unknown)
-            echo "[ocreateremote] ERROR: Không nhận ra provider từ host '$_O_HOST'." >&2
-            echo "[ocreateremote]   Providers hỗ trợ: github.com, gitlab.com (và self-hosted chứa 'gitlab' trong hostname)," >&2
-            echo "[ocreateremote]   dev.azure.com, gitea.*, forgejo.*, bitbucket.org" >&2
-            echo "[ocreateremote]   Nếu là GitLab self-hosted với domain riêng, đảm bảo hostname chứa 'gitlab'." >&2
+            echo "  ERROR: Không xác định được provider từ host '$_O_HOST'." >&2
+            echo "  Gợi ý: hostname chứa 'gitlab' → tự nhận GitLab self-hosted" >&2
+            echo "         header 'glpat' hoặc 'PRIVATE-TOKEN' → tự nhận GitLab" >&2
             return 1
             ;;
     esac
