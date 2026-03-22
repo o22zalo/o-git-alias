@@ -32,6 +32,8 @@
 #   git config --global alias.occ            "!source \"$SCRIPT\" && oconfigclean"
 #   git config --global alias.ocreateremote  "!source \"$SCRIPT\" && ocreateremote"
 #   git config --global alias.ocr            "!source \"$SCRIPT\" && ocreateremote"
+#   git config --global alias.addfile        "!source \"$SCRIPT\" && addfile"
+#   git config --global alias.af             "!source \"$SCRIPT\" && addfile"
 #
 # =============================================================================
 
@@ -64,6 +66,9 @@ function o() {
     echo "  git oconfig           git oc     mở .git/config bằng VSCode"
     echo "  git oconfigclean      git occ    xóa alias local trong .git/config"
     echo "  git ocreateremote     git ocr    tạo remote repo mới qua API provider"
+    echo "  git addfile <sub>     git af     tạo file helper cho repo"
+    echo "    addfile omessage               tạo .opushforce.message"
+    echo "    addfile ogitignore             tạo / cập nhật .gitignore"
     echo ""
     echo "  Config auth: $O_CONFIG_FILE"
     echo ""
@@ -475,6 +480,9 @@ _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
 
 [[ -f "${_O_MODULES_DIR}/ocreateremote.sh" ]] \
     && source "${_O_MODULES_DIR}/ocreateremote.sh"
+
+[[ -f "${_O_MODULES_DIR}/oaddfile.sh" ]] \
+    && source "${_O_MODULES_DIR}/oaddfile.sh"
 
 # =============================================================================
 # (Thêm module mới phía dưới theo cùng pattern)

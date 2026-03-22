@@ -46,6 +46,7 @@ $Aliases = @(
     @("oconfig", "oconfig"),
     @("oconfigclean", "oconfigclean"),
     @("ocreateremote", "ocreateremote"),
+    @("addfile", "addfile"),
     # Viết tắt (trỏ cùng hàm)
     @("oac", "oaddcommit"),
     @("ocl", "oclone"),
@@ -58,7 +59,8 @@ $Aliases = @(
     @("oi", "oinit"),
     @("oc", "oconfig"),
     @("occ", "oconfigclean"),
-    @("ocr", "ocreateremote")
+    @("ocr", "ocreateremote"),
+    @("af", "addfile")
 )
 $Count = 0
 
@@ -100,9 +102,11 @@ Write-Host "  git oinit            git oi"
 Write-Host "  git oconfig          git oc"
 Write-Host "  git oconfigclean     git occ"
 Write-Host "  git ocreateremote    git ocr"
+Write-Host "  git addfile          git af"
+Write-Host "    addfile omessage"
+Write-Host "    addfile ogitignore"
 Write-Host ""
 Write-Host " Kiem tra : git config --global --list"
 Write-Host " Thu ngay : git o"
 Write-Host ""
 Read-Host "Nhan Enter de dong" | Out-Null
-
