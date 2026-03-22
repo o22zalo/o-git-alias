@@ -7,65 +7,17 @@
 # ĐĂNG KÝ ALIASES (chạy 1 lần trong Git Bash, thay đường dẫn cho đúng):
 #
 #   SCRIPT="E:/path/to/alias.sh"
-#   git config --global alias.o          "!source \"$SCRIPT\" && o"
-#   git config --global alias.oaddcommit "!source \"$SCRIPT\" && oaddcommit"
-#   git config --global alias.oclone     "!source \"$SCRIPT\" && oclone"
-#   git config --global alias.opull      "!source \"$SCRIPT\" && opull"
-#   git config --global alias.opush      "!source \"$SCRIPT\" && opush"
-#   git config --global alias.opushforce "!source \"$SCRIPT\" && opushforce"
-#   git config --global alias.opullpush  "!source \"$SCRIPT\" && opullpush"
-#   git config --global alias.ostash     "!source \"$SCRIPT\" && ostash"
-#   git config --global alias.ofetch     "!source \"$SCRIPT\" && ofetch"
-#   git config --global alias.oinit      "!source \"$SCRIPT\" && oinit"
-#
-# =============================================================================
-# CẤU HÌNH .git-o-config — INI-style, đặt CÙNG THƯ MỤC với alias.sh
-# KHÔNG commit file này lên git (thêm vào .gitignore)
-# =============================================================================
-#
-# LOẠI AUTH:
-#   token=xxx   → nhúng vào URL: https://user:TOKEN@host/path
-#   header=xxx  → dùng git -c http.extraHeader="xxx"
-#   user=xxx    → username đi kèm token (nếu cần, mặc định lấy owner từ URL)
-#
-# MATCH: pattern dài nhất sẽ được ưu tiên (longest prefix wins)
-#
-# ── GitHub ────────────────────────────────────────────────────────────────────
-# [github.com/myorg]
-# token=ghp_xxxxxxxxxxxxxxxxxxxx
-#
-# [github.com/anotheraccount]
-# token=ghp_yyyyyyyyyyyyyyyyyyyy
-#
-# ── Azure DevOps ──────────────────────────────────────────────────────────────
-# PAT cần encode base64: base64(":YOUR_PAT")  (note: để trống phần username)
-# PowerShell: [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":YOUR_PAT"))
-# [dev.azure.com/myorg]
-# header=Authorization: Basic BASE64ENCODEDPAT==
-#
-# ── GitLab (cloud) ────────────────────────────────────────────────────────────
-# [gitlab.com/mygroup]
-# token=glpat-xxxxxxxxxxxxxxxxxxxx
-#
-# ── GitLab (self-hosted) ──────────────────────────────────────────────────────
-# [git.mycompany.com]
-# header=Authorization: Bearer glpat-xxxx
-# (hoặc dùng token= nếu provider chấp nhận embed vào URL)
-#
-# ── Gitea / Forgejo ───────────────────────────────────────────────────────────
-# [gitea.myserver.com/myuser]
-# token=GITEA_TOKEN_HERE
-# user=myuser
-#
-# ── Bitbucket ─────────────────────────────────────────────────────────────────
-# Dùng App Password: username + app_password nhúng vào URL
-# [bitbucket.org/myworkspace]
-# token=APP_PASSWORD_HERE
-# user=mybitbucketusername
-#
-# ── Forgejo Bearer ────────────────────────────────────────────────────────────
-# [forgejo.myhost.com]
-# header=Authorization: token FORGEJO_TOKEN
+#   git config --global alias.o              "!source \"$SCRIPT\" && o"
+#   git config --global alias.oaddcommit     "!source \"$SCRIPT\" && oaddcommit"
+#   git config --global alias.oclone         "!source \"$SCRIPT\" && oclone"
+#   git config --global alias.opull          "!source \"$SCRIPT\" && opull"
+#   git config --global alias.opush          "!source \"$SCRIPT\" && opush"
+#   git config --global alias.opushforce     "!source \"$SCRIPT\" && opushforce"
+#   git config --global alias.opullpush      "!source \"$SCRIPT\" && opullpush"
+#   git config --global alias.ostash         "!source \"$SCRIPT\" && ostash"
+#   git config --global alias.ofetch         "!source \"$SCRIPT\" && ofetch"
+#   git config --global alias.oinit          "!source \"$SCRIPT\" && oinit"
+#   git config --global alias.ocreateremote  "!source \"$SCRIPT\" && ocreateremote"
 #
 # =============================================================================
 
@@ -82,18 +34,18 @@ O_CONFIG_FILE="${_O_SCRIPT_DIR}/.git-o-config"
 function o() {
     echo ""
     echo "=== Git O-Alias Commands ==="
-    echo "  git o              — Xem danh sách lệnh này"
-    echo "  git oaddcommit     — git add -A + auto commit message"
-    echo "  git oclone [dir]   — clone repo từ o.url"
-    echo "  git opull          — pull từ o.url"
-    echo "  git opush          — push lên o.url"
-    echo "  git opushforce     — force push lên o.url + o.url0..o.url9"
-    echo "  git opullpush      — pull → commit → push"
-    echo "  git ostash         — stash drop + clean working dir"
-    echo "  git ofetch         — fetch từ o.url"
-    echo "  git oinit [url]    — git init + ghi sẵn .git/config chuẩn"
-    echo "  git oconfig        — mở .git-o-config bằng VSCode"
-    echo "  git ocreateremote  — tạo remote repo mới qua API provider"
+    echo "  git o                 — Xem danh sách lệnh này"
+    echo "  git oaddcommit        — git add -A + auto commit message"
+    echo "  git oclone [dir]      — clone repo từ o.url"
+    echo "  git opull             — pull từ o.url"
+    echo "  git opush             — push lên o.url"
+    echo "  git opushforce        — force push lên o.url + o.url0..o.url9"
+    echo "  git opullpush         — pull → commit → push"
+    echo "  git ostash            — stash drop + clean working dir"
+    echo "  git ofetch            — fetch từ o.url"
+    echo "  git oinit [url]       — git init + ghi sẵn .git/config chuẩn"
+    echo "  git oconfig           — mở .git/config bằng VSCode"
+    echo "  git ocreateremote     — tạo remote repo mới qua API provider"
     echo ""
     echo "  Config auth: $O_CONFIG_FILE"
     echo ""
@@ -104,7 +56,7 @@ function o() {
 
 
 # ---------------------------------------------------------------------------
-# OCONFIG: Mo .git-o-config bang VSCode
+# OCONFIG: Mo .git/config bang VSCode
 # ---------------------------------------------------------------------------
 function oconfig() {
     local git_config=".git/config"
@@ -125,7 +77,6 @@ function oconfig() {
 
 # ---------------------------------------------------------------------------
 # OCONFIGCLEAN: Xóa tất cả alias.* trong .git/config (local repo)
-# Buộc git dùng alias global thay vì local override
 # ---------------------------------------------------------------------------
 function oconfigclean() {
     local git_config=".git/config"
@@ -135,7 +86,6 @@ function oconfigclean() {
         return 1
     fi
 
-    # Đếm số alias tìm thấy trước khi xóa
     local count
     count=$(git config --local --list 2>/dev/null | grep -c "^alias\." || true)
 
@@ -144,7 +94,6 @@ function oconfigclean() {
         return 0
     fi
 
-    # Xóa toàn bộ section [alias] trong local .git/config
     git config --local --remove-section alias 2>/dev/null || true
 
     echo "[oconfigclean] ✓ Đã xóa $count alias khỏi $git_config"
@@ -179,7 +128,6 @@ function _o_resolve_auth() {
     local b_type="" b_token="" b_user="" b_header="" b_pattern=""
     local cur_section="" cur_token="" cur_user="" cur_header=""
 
-    # Đánh giá và so sánh section vừa đọc xong
     _flush() {
         if [[ -n "$cur_section" && "$url" == *"$cur_section"* ]]; then
             local slen=${#cur_section}
@@ -198,12 +146,10 @@ function _o_resolve_auth() {
     }
 
     while IFS= read -r raw || [[ -n "$raw" ]]; do
-        # Strip Windows CR và trim whitespace
         local line="${raw%%$'\r'}"
         line="${line#"${line%%[![:space:]]*}"}"
         line="${line%"${line##*[![:space:]]}"}"
 
-        # Bỏ comment và dòng trắng
         [[ -z "$line" || "$line" == \#* ]] && continue
 
         if   [[ "$line" =~ ^\[(.+)\]$                  ]]; then _flush
@@ -214,7 +160,7 @@ function _o_resolve_auth() {
         fi
     done < "$O_CONFIG_FILE"
 
-    _flush   # flush section cuối
+    _flush
     unset -f _flush
 
     O_AUTH_TYPE="$b_type"
@@ -226,7 +172,6 @@ function _o_resolve_auth() {
 
 # ---------------------------------------------------------------------------
 # CORE: Nhúng token vào URL
-# https://host/owner/repo.git  →  https://user:token@host/owner/repo.git
 # ---------------------------------------------------------------------------
 function _o_embed_token() {
     local url="$1" token="$2" user="$3"
@@ -236,7 +181,6 @@ function _o_embed_token() {
         local host="${BASH_REMATCH[2]}"
         local path="${BASH_REMATCH[3]}"
 
-        # Nếu không truyền user, lấy phần đầu tiên của path (owner/org)
         if [[ -z "$user" && "$path" =~ ^/([^/]+)/ ]]; then
             user="${BASH_REMATCH[1]}"
         fi
@@ -247,19 +191,15 @@ function _o_embed_token() {
             echo "${scheme}${token}@${host}${path}"
         fi
     else
-        # SSH hoặc format không phải HTTPS — trả nguyên
         echo "$url"
     fi
 }
 
 # ---------------------------------------------------------------------------
 # CORE: Chạy git command với auth tự động
-# Cú pháp: _o_run_git <remote-url> <git-args...>
-# Ghi chú: URL phải là arg CUỐI trong git-args khi gọi (push/pull/fetch/clone)
-#          Hàm này tự append URL đúng chỗ.
 # ---------------------------------------------------------------------------
 function _o_run_git() {
-    local url="$1"; shift  # tách URL, còn lại là git args (không có URL)
+    local url="$1"; shift
     _o_resolve_auth "$url"
 
     case "$O_AUTH_TYPE" in
@@ -301,7 +241,6 @@ function commitstatus() {
     local tmpfile
     tmpfile=$(mktemp "/tmp/git-o-commit.XXXXXX")
 
-    # Gắn build version nếu có
     if [[ -f .local-webpack-build-version ]]; then
         cat .local-webpack-build-version >> "$tmpfile"
         printf '\n' >> "$tmpfile"
@@ -311,7 +250,6 @@ function commitstatus() {
     git status --porcelain \
         | awk '
         {
-            # Lấy status code và filepath (bỏ 2 ký tự đầu + space)
             s = substr($0, 1, 2)
             f = substr($0, 4)
             gsub(/^[ \t]+|[ \t]+$/, "", s)
@@ -339,44 +277,38 @@ function commitstatus() {
 # GIT COMMANDS
 # ---------------------------------------------------------------------------
 
-# git add -A + commit (với message hoặc auto)
 function oaddcommit() {
     git add -A
-    if [[ -n "$1" ]]; then
-        git commit -m "$1" --allow-empty --allow-empty-message
+    if [[ -n "$*" ]]; then
+        git commit -m "$*" --allow-empty --allow-empty-message
     else
         commitstatus
     fi
 }
 
-# stash + drop + clean
 function ostash() {
     git stash
     git stash drop
     git clean -d -f .
 }
 
-# fetch
 function ofetch() {
     local url; url=$(_o_get_url) || return 1
     _o_run_git "$url" fetch
     echo "[ofetch] Done: $url"
 }
 
-# pull
 function opull() {
     local url; url=$(_o_get_url) || return 1
     _o_run_git "$url" pull
 }
 
-# push (normal)
 function opush() {
     local url; url=$(_o_get_url) || return 1
     _o_run_git "$url" push --quiet -u main
     echo "[opush] Done: $url"
 }
 
-# clone từ o.url
 function oclone() {
     local url; url=$(_o_get_url) || return 1
     local dest="${1:-}"
@@ -400,20 +332,16 @@ function oclone() {
     esac
 }
 
-# force push lên o.url chính + tất cả o.url0 .. o.url9
 function opushforce() {
     git add -A
 
-    if [[ -n "$1" ]]; then
-        # Ưu tiên 1: message từ arg
-        git commit -m "$1" --allow-empty --allow-empty-message
+    if [[ -n "$*" ]]; then
+        git commit -m "$*" --allow-empty --allow-empty-message
     else
-        # Ưu tiên 2: message từ file .opushforce.message trong cwd
         local msg_file=".opushforce.message"
         local file_msg=""
         if [[ -f "$msg_file" ]]; then
             file_msg=$(cat "$msg_file")
-            # Trim whitespace đầu/cuối
             file_msg="${file_msg#"${file_msg%%[![:space:]]*}"}"
             file_msg="${file_msg%"${file_msg##*[![:space:]]}"}"
         fi
@@ -424,7 +352,6 @@ function opushforce() {
             true > "$msg_file"
             echo "[opushforce] Đã clear nội dung $msg_file"
         else
-            # Ưu tiên 3: auto-gen từ git status
             commitstatus
         fi
     fi
@@ -464,7 +391,6 @@ function _o_force_push_to() {
     echo "[opushforce] ✓ Done: $url"
 }
 
-# pull → add → commit → push
 function opullpush() {
     local url; url=$(_o_get_url) || return 1
 
@@ -473,8 +399,8 @@ function opullpush() {
 
     echo "[opullpush] Staging & committing..."
     git add -A
-    if [[ -n "$1" ]]; then
-        git commit -m "$1" --allow-empty --allow-empty-message
+    if [[ -n "$*" ]]; then
+        git commit -m "$*" --allow-empty --allow-empty-message
     else
         commitstatus
     fi
@@ -497,34 +423,19 @@ function opullpush() {
     echo "[opullpush] ✓ Done"
 }
 
-# ---------------------------------------------------------------------------
-# INIT: git init + ghi .git/config từ template
-# Template: git-config.template (cùng thư mục với alias.sh)
-# Placeholder trong template: {{REMOTE_URL}}
-#
-# Cú pháp: oinit [remote-url]
-#   remote-url : URL remote chính (o.url). Nếu bỏ trống dùng placeholder.
-#
-# Ví dụ:
-#   git oinit
-#   git oinit https://github.com/myorg/myrepo.git
-# ---------------------------------------------------------------------------
 function oinit() {
     local remote_url="${1:-oremoteUrl}"
     local template_file="${_O_SCRIPT_DIR}/git-config.template"
     local git_config=".git/config"
 
-    # --- 1. Kiểm tra template tồn tại ----------------------------------------
     if [[ ! -f "$template_file" ]]; then
         echo "[oinit] ERROR: Không tìm thấy template: $template_file" >&2
         return 1
     fi
 
-    # --- 2. git init ----------------------------------------------------------
     git init --initial-branch=main 2>/dev/null || git init
     git checkout -b main 2>/dev/null || true
 
-    # --- 3. Render template → .git/config (thay {{REMOTE_URL}}) --------------
     sed "s|{{REMOTE_URL}}|${remote_url}|g" "$template_file" > "$git_config"
 
     echo "[oinit] ✓ git init xong"
@@ -543,10 +454,10 @@ function oinit() {
 # Thêm module mới: tạo file modules/<tên>.sh, source ở đây.
 # =============================================================================
 _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
- 
+
 [[ -f "${_O_MODULES_DIR}/ocreateremote.sh" ]] \
     && source "${_O_MODULES_DIR}/ocreateremote.sh"
- 
+
 # =============================================================================
 # (Thêm module mới phía dưới theo cùng pattern)
 # [[ -f "${_O_MODULES_DIR}/otemplate.sh" ]] && source "${_O_MODULES_DIR}/otemplate.sh"

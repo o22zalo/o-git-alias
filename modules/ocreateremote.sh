@@ -168,15 +168,6 @@ function _o_curl_api() {
 function _o_save_result() {
     local resp="$1" detected_url="$2" fallback_url="$3"
 
-    # Trích lỗi từ JSON
-    local err_msg=""
-    if echo "$resp" | grep -q '"message"'; then
-        err_msg=$(echo "$resp" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
-    fi
-    if [[ -z "$err_msg" ]] && echo "$resp" | grep -q '"error"'; then
-        err_msg=$(echo "$resp" | grep -o '"error":"[^"]*"' | head -1 | cut -d'"' -f4)
-    fi
-
     if [[ -n "$detected_url" ]]; then
         local slot
         slot=$(_o_next_url_slot)
@@ -197,9 +188,18 @@ function _o_save_result() {
         fi
         return 0
     else
+        # Trích thông báo lỗi từ JSON response
+        local err_msg=""
+        if echo "$resp" | grep -q '"message"'; then
+            err_msg=$(echo "$resp" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
+        fi
+        if [[ -z "$err_msg" ]] && echo "$resp" | grep -q '"error"'; then
+            err_msg=$(echo "$resp" | grep -o '"error":"[^"]*"' | head -1 | cut -d'"' -f4)
+        fi
+
         echo ""
         echo "  ✗ Tạo repo thất bại." >&2
-        [[ -n "$err_msg" ]]     && echo "  ✗ Lỗi API  : $err_msg" >&2
+        [[ -n "$err_msg" ]]      && echo "  ✗ Lỗi API  : $err_msg" >&2
         [[ -n "$fallback_url" ]] && echo "  ✗ URL dự kiến (chưa verify): $fallback_url" >&2
         echo "" >&2
         echo "  Response:" >&2
@@ -217,19 +217,22 @@ function _o_create_github() {
     body=$(printf '{"name":"%s","description":"%s","private":%s,"auto_init":false}' \
         "$repo_name" "$desc" "$is_private")
 
+    # Thử org endpoint trước
     local resp
     resp=$(_o_curl_api POST "https://api.github.com/orgs/${owner}/repos" "$body" "$dry_run")
     [[ "$dry_run" == "1" ]] && return 0
 
-    local html_url
-    html_url=$(echo "$resp" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
-    if [[ -z "$html_url" ]]; then
-        resp=$(_o_curl_api POST "https://api.github.com/user/repos" "$body")
-        html_url=$(echo "$resp" | grep -o '"html_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+    # GitHub trả "clone_url" trực tiếp — dùng field này thay vì html_url
+    # để tránh bị nhiễu bởi "owner.html_url" nested trong JSON
+    local clone_url
+    clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+    # Nếu org endpoint trả lỗi (owner là personal account) → fallback /user/repos
+    if [[ -z "$clone_url" ]]; then
+        resp=$(_o_curl_api POST "https://api.github.com/user/repos" "$body" "$dry_run")
+        clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
 
-    local clone_url=""
-    [[ -n "$html_url" ]] && clone_url="${html_url}.git"
     _o_save_result "$resp" "$clone_url" "https://github.com/${owner}/${repo_name}.git"
 }
 
@@ -270,7 +273,7 @@ function _o_create_gitea() {
     local clone_url
     clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [[ -z "$clone_url" ]]; then
-        resp=$(_o_curl_api POST "https://${host}/api/v1/user/repos" "$body")
+        resp=$(_o_curl_api POST "https://${host}/api/v1/user/repos" "$body" "$dry_run")
         clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
     _o_save_result "$resp" "$clone_url" "https://${host}/${owner}/${repo_name}.git"
