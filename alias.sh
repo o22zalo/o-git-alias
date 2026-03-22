@@ -93,6 +93,7 @@ function o() {
     echo "  git ofetch         — fetch từ o.url"
     echo "  git oinit [url]    — git init + ghi sẵn .git/config chuẩn"
     echo "  git oconfig        — mở .git-o-config bằng VSCode"
+    echo "  git ocreateremote  — tạo remote repo mới qua API provider"
     echo ""
     echo "  Config auth: $O_CONFIG_FILE"
     echo ""
@@ -535,3 +536,18 @@ function oinit() {
         echo "[oinit]   git config o.url https://github.com/myorg/myrepo.git"
     fi
 }
+
+# =============================================================================
+# MODULES — Load các module mở rộng từ thư mục modules/
+# Mỗi module tự có guard chống load lại (idempotent).
+# Thêm module mới: tạo file modules/<tên>.sh, source ở đây.
+# =============================================================================
+_O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
+ 
+[[ -f "${_O_MODULES_DIR}/ocreateremote.sh" ]] \
+    && source "${_O_MODULES_DIR}/ocreateremote.sh"
+ 
+# =============================================================================
+# (Thêm module mới phía dưới theo cùng pattern)
+# [[ -f "${_O_MODULES_DIR}/otemplate.sh" ]] && source "${_O_MODULES_DIR}/otemplate.sh"
+# =============================================================================

@@ -21,11 +21,6 @@ if (-not (Test-Path $AliasSh)) {
 }
 
 # ── Alias value: dung cmd /c + git bash truc tiep qua sh.exe -----------------
-# Git for Windows co sh.exe trong PATH khi chay qua git alias (khac voi CMD)
-# Cach don gian nhat: ghi thang Windows path vao alias, git se goi sh -c
-# Format: !sh.exe -c 'source "WIN_PATH_FORWARD_SLASH" && cmd "$@"' --
-
-# Chuyen backslash -> forward slash (bash trong git alias hieu duoc C:/foo/bar)
 $AliasShFwd = $AliasSh -replace '\\', '/'
 
 Write-Host "[setup] Path fwd : $AliasShFwd"
@@ -33,12 +28,24 @@ Write-Host ""
 Write-Host "[setup] Dang dang ky aliases..."
 Write-Host ""
 
-$Aliases = @("o", "oaddcommit", "oclone", "opull", "opush", "opushforce", "opullpush", "ostash", "ofetch", "oinit", "oconfig", "oconfigclean")
+$Aliases = @(
+    "o",
+    "oaddcommit",
+    "oclone",
+    "opull",
+    "opush",
+    "opushforce",
+    "opullpush",
+    "ostash",
+    "ofetch",
+    "oinit",
+    "oconfig",
+    "oconfigclean",
+    "ocreateremote"   # <-- Mới thêm
+)
 $Count = 0
 
 foreach ($cmd in $Aliases) {
-    # Git alias format: !sh -c 'source "C:/path/alias.sh" && cmd "$@"' --
-    # sh.exe luon co trong PATH khi git chay alias (Git for Windows tu them)
     $val = "!sh -c 'source " + '"' + $AliasShFwd + '"' + " && $cmd " + '"$@"' + "' --"
     
     git config --global "alias.$cmd" $val
