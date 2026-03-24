@@ -19,6 +19,7 @@ modules/
   ocreateremote.sh        # Module tạo remote repo qua REST API
   oaddfile.sh             # Module tạo file helper (.gitignore, .opushforce.message)
   opushforceurl.sh        # Module force push lên một remote URL được chọn
+  oexecute.sh             # Module menu tương tác chọn & chạy lệnh
 ```
 
 ---
@@ -49,7 +50,7 @@ Script sẽ tự động đăng ký alias vào git global config. Kiểm tra:
 
 ```bash
 git config --global --list | grep alias.o
-git o
+git oe
 ```
 
 ---
@@ -59,6 +60,7 @@ git o
 | Lệnh                      | Mô tả                                                              |
 | ------------------------- | ------------------------------------------------------------------ |
 | `git o`                   | Hiện danh sách lệnh                                                |
+| `git oexecute`            | **Menu tương tác: chọn số → chạy lệnh** (dành khi quên lệnh nào)  |
 | `git oaddcommit [msg]`    | `git add -A` + commit (tự sinh message nếu bỏ trống)               |
 | `git oclone [dir]`        | Clone repo từ `o.url`                                              |
 | `git opull`               | Pull từ `o.url`                                                    |
@@ -77,6 +79,7 @@ git o
 
 | Viết tắt     | Tương đương         |
 | ------------ | ------------------- |
+| `git oe`     | `git oexecute`      |
 | `git oac`    | `git oaddcommit`    |
 | `git ocl`    | `git oclone`        |
 | `git opl`    | `git opull`         |
@@ -91,6 +94,53 @@ git o
 | `git occ`    | `git oconfigclean`  |
 | `git ocr`    | `git ocreateremote` |
 | `git af`     | `git addfile`       |
+
+---
+
+## Menu tương tác (`oexecute`)
+
+Dùng khi **quên tên lệnh** — không cần nhớ alias, chỉ cần chọn số:
+
+```bash
+git oe
+# hoặc
+git oexecute
+```
+
+**Giao diện:**
+
+```
+  ┌──────────────────────────────────────────────────────────────────
+  │  git oexecute — Chọn lệnh để thực hiện
+  ├──────────────────────────────────────────────────────────────────
+  │
+  │   #   Lệnh                    Viết tắt   Mô tả
+  │  ───────────────────────────────────────────────────────────────
+  │   1   git oaddcommit          git oac    add -A + auto commit
+  │   2   git opush               git ops    push lên o.url
+  │   3   git opull               git opl    pull từ o.url
+  │   4   git opushforce          git opf    force push tất cả remote
+  │   5   git opushforceurl       git opfurl force push chọn 1 remote
+  │   6   git opullpush           git opp    pull → commit → push
+  │   7   git ofetch              git oft    fetch từ o.url
+  │   8   git ostash              git ost    stash drop + clean
+  │   9   git oinit               git oi     git init + ghi .git/config
+  │  10   git oconfig             git oc     mở .git/config bằng VSCode
+  │  11   git oconfigclean        git occ    xóa alias local .git/config
+  │  12   git ocreateremote       git ocr    tạo remote repo qua API
+  │  13   git addfile omessage    git af     tạo .opushforce.message
+  │  14   git addfile ogitignore  git af     tạo / cập nhật .gitignore
+  │  15   git oclone              git ocl    clone repo từ o.url
+  │
+  │   0   Thoát
+  │
+  └──────────────────────────────────────────────────────────────────
+
+  Chọn số thứ tự [0-15]: _
+```
+
+- Các lệnh cần commit message (oaddcommit, opushforce, v.v.) sẽ được hỏi thêm message ngay sau khi chọn.
+- Sau khi lệnh chạy xong, menu hỏi có muốn quay lại chọn tiếp không.
 
 ---
 
@@ -126,22 +176,6 @@ git opfurl
 3. Kiểm tra working tree:
    - **Sạch** (không có file thay đổi) → chỉ force push, bỏ qua add/commit
    - **Có thay đổi** → `git add -A` + commit (auto message hoặc từ `.opushforce.message`) + force push
-
-```
-  ┌─────────────────────────────────────────────────
-  │  git opushforceurl
-  ├─────────────────────────────────────────────────
-  │  Working tree : ⚠  có 3 file thay đổi → sẽ add + commit + push
-  └─────────────────────────────────────────────────
-
-  Chọn remote URL để force push:
-
-    [1] o.url        https://github.com/org/repo.git
-    [2] o.url0       https://gitlab.com/org/repo.git
-    [3] o.url1       https://gitea.myserver.com/org/repo.git
-
-  Số thứ tự [1-3]: 2
-```
 
 ---
 

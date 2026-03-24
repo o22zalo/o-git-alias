@@ -36,6 +36,8 @@
 #   git config --global alias.ocr            "!source \"$SCRIPT\" && ocreateremote"
 #   git config --global alias.addfile        "!source \"$SCRIPT\" && addfile"
 #   git config --global alias.af             "!source \"$SCRIPT\" && addfile"
+#   git config --global alias.oexecute       "!source \"$SCRIPT\" && oexecute"
+#   git config --global alias.oe             "!source \"$SCRIPT\" && oexecute"
 #
 # =============================================================================
 
@@ -56,6 +58,7 @@ function o() {
     echo "  Lệnh đầy đủ           Viết tắt   Mô tả"
     echo "  ──────────────────────────────────────────────────────────────"
     echo "  git o                            Xem danh sách lệnh này"
+    echo "  git oexecute          git oe     Menu chọn & chạy lệnh (interactive)"
     echo "  git oaddcommit        git oac    git add -A + auto commit message"
     echo "  git oclone [dir]      git ocl    clone repo từ o.url"
     echo "  git opull             git opl    pull từ o.url"
@@ -489,6 +492,9 @@ _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
 
 [[ -f "${_O_MODULES_DIR}/opushforceurl.sh" ]] \
     && source "${_O_MODULES_DIR}/opushforceurl.sh"
+
+[[ -f "${_O_MODULES_DIR}/oexecute.sh" ]] \
+    && source "${_O_MODULES_DIR}/oexecute.sh"
 
 # =============================================================================
 # (Thêm module mới phía dưới theo cùng pattern)

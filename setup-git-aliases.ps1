@@ -34,6 +34,7 @@ Write-Host ""
 $Aliases = @(
     # Lệnh đầy đủ
     @("o", "o"),
+    @("oexecute", "oexecute"),
     @("oaddcommit", "oaddcommit"),
     @("oclone", "oclone"),
     @("opull", "opull"),
@@ -49,6 +50,7 @@ $Aliases = @(
     @("ocreateremote", "ocreateremote"),
     @("addfile", "addfile"),
     # Viết tắt (trỏ cùng hàm)
+    @("oe", "oexecute"),
     @("oac", "oaddcommit"),
     @("ocl", "oclone"),
     @("opl", "opull"),
@@ -92,6 +94,7 @@ Write-Host "[setup] Done: $Count aliases dang ky thanh cong."
 Write-Host ""
 Write-Host "  Lenh day du          Viet tat"
 Write-Host "  =============================="
+Write-Host "  git oexecute         git oe     ← Menu chon lenh (MOI)"
 Write-Host "  git oaddcommit       git oac"
 Write-Host "  git oclone           git ocl"
 Write-Host "  git opull            git opl"
@@ -110,6 +113,6 @@ Write-Host "    addfile omessage"
 Write-Host "    addfile ogitignore"
 Write-Host ""
 Write-Host " Kiem tra : git config --global --list"
-Write-Host " Thu ngay : git o"
+Write-Host " Thu ngay : git oe"
 Write-Host ""
 Read-Host "Nhan Enter de dong" | Out-Null
