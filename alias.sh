@@ -339,8 +339,19 @@ function opush() {
 }
 
 function oclone() {
-    local url; url=$(_o_get_url) || return 1
-    local dest="${1:-}"
+    local first_arg="${1:-}"
+    local url dest
+
+    # Nếu arg đầu tiên trông như URL → dùng luôn, không cần o.url
+    if [[ "$first_arg" =~ ^https?:// || "$first_arg" =~ ^git@ ]]; then
+        url="$first_arg"
+        dest="${2:-}"
+    else
+        # Không có URL truyền vào → đọc từ o.url như cũ
+        url=$(_o_get_url) || return 1
+        dest="$first_arg"
+    fi
+
     _o_resolve_auth "$url"
 
     case "$O_AUTH_TYPE" in
