@@ -64,7 +64,7 @@ function o() {
     echo "  git oaddcommit        git oac    git add -A + auto commit message"
     echo "  git oclone [dir]      git ocl    clone repo từ o.url"
     echo "  git opull             git opl    pull từ o.url (branch hiện tại)"
-    echo "  git opullbranch       git oplb   fetch tất cả remote, chọn branch để pull"
+    echo "  git opullbranch       git oplb   fetch remote, chọn branch để lấy nội dung"
     echo "  git opush             git ops    push lên o.url"
     echo "  git opushforce        git opf    force push lên o.url + o.url0..o.url9"
     echo "  git opushforceurl     git opfurl force push lên một remote URL được chọn"

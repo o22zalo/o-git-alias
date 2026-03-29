@@ -28,7 +28,7 @@ function _oe_print_menu() {
     echo "  │   1   git oaddcommit          git oac    add -A + auto commit"
     echo "  │   2   git opush               git ops    push lên o.url"
     echo "  │   3   git opull               git opl    pull từ o.url"
-    echo "  │   4   git opullbranch         git oplb   fetch tất cả remote, chọn branch"
+    echo "  │   4   git opullbranch         git oplb   fetch remote, lấy nội dung branch"
     echo "  │   5   git opushforce          git opf    force push tất cả remote"
     echo "  │   6   git opushforceurl       git opfurl force push chọn 1 remote"
     echo "  │   7   git opullpush           git opp    pull → commit → push"

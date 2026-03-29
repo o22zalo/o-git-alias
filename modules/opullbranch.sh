@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 # modules/opullbranch.sh — Fetch tất cả remote, liệt kê branch mới hơn local,
-#                          cho chọn rồi merge vào branch hiện tại
+#                          cho chọn rồi áp nội dung branch đó vào working tree
+#                          hiện tại để review, không merge commit
 # Được load tự động bởi alias.sh — KHÔNG source trực tiếp file này
 #
 # Phụ thuộc (inject từ alias.sh trước khi source):
@@ -17,7 +18,10 @@
 #      - Branch remote ahead local → [AHEAD +N]
 #      - Branch chưa tồn tại local → [NEW +N commit(s)]
 #   4. Hiển thị danh sách tên branch rõ ràng (không có _o_tmp_N)
-#   5. Merge ref đã chọn vào branch HIỆN TẠI — không switch, không tạo branch mới
+#   5. Áp nội dung ref đã chọn vào working tree của branch HIỆN TẠI
+#      - Không switch branch
+#      - Không tạo branch mới
+#      - Không merge commit
 # =============================================================================
 
 [[ -n "${_O_MODULE_OPULLBRANCH_LOADED:-}" ]] && return 0
@@ -31,6 +35,21 @@ function _opb_cleanup_tmp_remotes() {
     for r in $(git remote 2>/dev/null | grep '^_o_tmp_'); do
         git remote remove "$r" 2>/dev/null || true
     done
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Chỉ cho phép tiếp tục khi working tree sạch để tránh ghi đè nhầm
+# ---------------------------------------------------------------------------
+function _opb_require_clean_worktree() {
+    local repo_root="${1:-.}"
+
+    if [[ -n "$(git -C "$repo_root" status --porcelain 2>/dev/null)" ]]; then
+        echo "[opullbranch] ERROR: Working tree đang có thay đổi." >&2
+        echo "[opullbranch]   Hãy commit / stash / discard trước khi lấy nội dung từ branch khác." >&2
+        return 1
+    fi
+
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -130,6 +149,13 @@ function opullbranch() {
 
     local current_branch
     current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
+    if ! _opb_require_clean_worktree "$repo_root"; then
+        return 1
+    fi
 
     # ── Thu thập URL ──────────────────────────────────────────────────────────
     local -a all_url_keys=()
@@ -270,7 +296,7 @@ function opullbranch() {
     echo ""
     echo "    [0]  Hủy"
     echo ""
-    printf "  Code sẽ được merge vào branch hiện tại: [%s]\n" "$current_branch"
+    printf "  Nội dung sẽ được áp vào working tree hiện tại: [%s]\n" "$current_branch"
     echo ""
 
     local choice
@@ -288,20 +314,20 @@ function opullbranch() {
     local sel_status="${item_status[$sel_idx]}"
 
     echo ""
-    printf "  → Lấy code từ branch : %s  %s\n" "$sel_branch" "$sel_status"
-    printf "  → Merge vào          : %s\n" "$current_branch"
+    printf "  → Lấy nội dung từ branch : %s  %s\n" "$sel_branch" "$sel_status"
+    printf "  → Áp vào working tree   : %s\n" "$current_branch"
     echo ""
 
-    # ── Merge vào branch hiện tại ─────────────────────────────────────────────
-    echo "  [opullbranch] Đang merge..."
-    if git merge "$sel_ref" --ff-only 2>/dev/null; then
-        echo "  ✓ Fast-forward merge thành công."
-    elif git merge "$sel_ref" --no-edit; then
-        echo "  ✓ Merge thành công (tạo merge commit)."
+    # ── Áp nội dung branch đã chọn vào working tree hiện tại ─────────────────
+    echo "  [opullbranch] Đang áp nội dung vào working tree..."
+    if git -C "$repo_root" restore --source="$sel_ref" --worktree -- .; then
+        echo "  ✓ Đã lấy nội dung branch về working tree."
+        echo "  ✓ Chưa merge, chưa tạo commit nào."
+        echo "  [opullbranch] Xem thay đổi bằng: git status / git diff"
     else
         echo ""
-        echo "  ✗ Merge thất bại — có conflict." >&2
-        echo "  ✗ Resolve xong rồi chạy: git merge --continue" >&2
+        echo "  ✗ Không thể áp nội dung branch vào working tree." >&2
+        echo "  ✗ Kiểm tra lại trạng thái repo rồi thử lại." >&2
         echo ""
         _opb_cleanup_tmp_remotes
         return 1

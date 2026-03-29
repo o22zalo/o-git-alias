@@ -19,7 +19,7 @@ modules/
   ocreateremote.sh        # Module tạo remote repo qua REST API
   oaddfile.sh             # Module tạo file helper (.gitignore, .opushforce.message)
   opushforceurl.sh        # Module force push lên một remote URL được chọn
-  opullbranch.sh          # Module fetch toàn bộ remote, chọn branch để pull
+  opullbranch.sh          # Module fetch remote, chọn branch rồi lấy nội dung về working tree
   oexecute.sh             # Module menu tương tác chọn & chạy lệnh
 ```
 
@@ -65,7 +65,7 @@ git oe
 | `git oaddcommit [msg]`    | `git add -A` + commit (tự sinh message nếu bỏ trống)               |
 | `git oclone [dir]`        | Clone repo từ `o.url`                                              |
 | `git opull`               | Pull từ `o.url` (branch hiện tại)                                  |
-| `git opullbranch`         | Fetch tất cả remote, liệt kê branch mới hơn, chọn để pull         |
+| `git opullbranch`         | Fetch tất cả remote, liệt kê branch mới hơn, chọn để lấy nội dung |
 | `git opush`               | Push lên `o.url` (branch `main`)                                   |
 | `git opushforce [msg]`    | add → commit → force push lên `o.url` và tất cả `o.url0`..`o.url9` |
 | `git opushforceurl [msg]` | Chọn một remote URL → force push lên đúng URL đó                   |
@@ -122,7 +122,7 @@ git oexecute
   │   1   git oaddcommit          git oac    add -A + auto commit
   │   2   git opush               git ops    push lên o.url
   │   3   git opull               git opl    pull từ o.url
-  │   4   git opullbranch         git oplb   fetch tất cả remote, chọn branch
+  │   4   git opullbranch         git oplb   fetch remote, lấy nội dung branch
   │   5   git opushforce          git opf    force push tất cả remote
   │   6   git opushforceurl       git opfurl force push chọn 1 remote
   │   7   git opullpush           git opp    pull → commit → push
@@ -165,7 +165,7 @@ git config o.url1 https://gitea.myserver.com/org/repo.git
 
 ## Fetch branch từ nhiều remote (`opullbranch`)
 
-Dùng khi muốn **xem tất cả branch mới hoặc có commit mới hơn** so với local trên tất cả remote, rồi chọn một để pull về.
+Dùng khi muốn **xem tất cả branch mới hoặc có commit mới hơn** so với local trên tất cả remote, rồi chọn một để lấy nội dung file về working tree hiện tại mà **không merge ngay**.
 
 ```bash
 git opullbranch
@@ -180,10 +180,12 @@ git oplb
    - **[NEW]** — Branch chưa tồn tại trên local
    - **[AHEAD +N]** — Remote có N commit mới hơn local
    - Branch mà local đã up-to-date hoặc mới hơn → không hiển thị
-3. Hiển thị danh sách, chọn branch muốn pull
+3. Hiển thị danh sách, chọn branch muốn lấy nội dung
 4. Thực hiện:
-   - Branch **[NEW]** → `git checkout -b <branch> <remote-ref>`
-   - Branch **[AHEAD]** → switch sang branch đó + `git merge --ff-only`
+   - Áp nội dung từ branch đã chọn vào **working tree hiện tại**
+   - **Không switch branch**
+   - **Không merge commit**
+   - Bạn tự review bằng `git status` / `git diff`, rồi merge hoặc commit sau
 
 **Ví dụ output:**
 
@@ -191,7 +193,7 @@ git oplb
   [fetch] o.url       https://github.com/org/repo.git ... ✓
   [fetch] o.url0      https://gitlab.com/org/repo.git ... ✓
 
-  Các branch có thể pull:
+  Branch có thể lấy về:
 
     #     Branch                          Remote        Trạng thái
     ────  ──────────────────────────────  ────────────  ──────────────
@@ -365,3 +367,4 @@ git config o.url https://github.com/myorg/myrepo.git
 - File `.git-o-config` đã được thêm vào `.gitignore` — không bao giờ bị commit nhầm.
 - `alias.sh` dùng `BASH_SOURCE[0]` để tự tìm đường dẫn, không cần chỉnh tay sau khi đăng ký.
 - `opullbranch` dùng remote tạm `_o_tmp_N` trong quá trình fetch, tự dọn sạch sau khi xong — không ảnh hưởng cấu hình git của repo.
+- `opullbranch` yêu cầu working tree sạch trước khi áp nội dung branch khác để tránh ghi đè nhầm thay đổi đang làm dở.
