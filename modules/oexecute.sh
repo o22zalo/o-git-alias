@@ -28,18 +28,19 @@ function _oe_print_menu() {
     echo "  │   1   git oaddcommit          git oac    add -A + auto commit"
     echo "  │   2   git opush               git ops    push lên o.url"
     echo "  │   3   git opull               git opl    pull từ o.url"
-    echo "  │   4   git opushforce          git opf    force push tất cả remote"
-    echo "  │   5   git opushforceurl       git opfurl force push chọn 1 remote"
-    echo "  │   6   git opullpush           git opp    pull → commit → push"
-    echo "  │   7   git ofetch              git oft    fetch từ o.url"
-    echo "  │   8   git ostash              git ost    stash drop + clean"
-    echo "  │   9   git oinit               git oi     git init + ghi .git/config"
-    echo "  │  10   git oconfig             git oc     mở .git/config bằng VSCode"
-    echo "  │  11   git oconfigclean        git occ    xóa alias local .git/config"
-    echo "  │  12   git ocreateremote       git ocr    tạo remote repo qua API"
-    echo "  │  13   git addfile omessage    git af     tạo .opushforce.message"
-    echo "  │  14   git addfile ogitignore  git af     tạo / cập nhật .gitignore"
-    echo "  │  15   git oclone              git ocl    clone repo từ o.url"
+    echo "  │   4   git opullbranch         git oplb   fetch tất cả remote, chọn branch"
+    echo "  │   5   git opushforce          git opf    force push tất cả remote"
+    echo "  │   6   git opushforceurl       git opfurl force push chọn 1 remote"
+    echo "  │   7   git opullpush           git opp    pull → commit → push"
+    echo "  │   8   git ofetch              git oft    fetch từ o.url"
+    echo "  │   9   git ostash              git ost    stash drop + clean"
+    echo "  │  10   git oinit               git oi     git init + ghi .git/config"
+    echo "  │  11   git oconfig             git oc     mở .git/config bằng VSCode"
+    echo "  │  12   git oconfigclean        git occ    xóa alias local .git/config"
+    echo "  │  13   git ocreateremote       git ocr    tạo remote repo qua API"
+    echo "  │  14   git addfile omessage    git af     tạo .opushforce.message"
+    echo "  │  15   git addfile ogitignore  git af     tạo / cập nhật .gitignore"
+    echo "  │  16   git oclone              git ocl    clone repo từ o.url"
     echo "  │"
     echo "  │   0   Thoát"
     echo "  │"
@@ -82,29 +83,34 @@ function _oe_run() {
             opull
             ;;
         4)
+            echo "  → git opullbranch"
+            echo ""
+            opullbranch
+            ;;
+        5)
             echo "  → git opushforce"
             local msg; msg=$(_oe_ask_message "Commit message (Enter để tự sinh):")
             echo ""
             opushforce $msg
             ;;
-        5)
+        6)
             echo "  → git opushforceurl"
             local msg; msg=$(_oe_ask_message "Commit message (Enter để tự sinh):")
             echo ""
             opushforceurl $msg
             ;;
-        6)
+        7)
             echo "  → git opullpush"
             local msg; msg=$(_oe_ask_message "Commit message (Enter để tự sinh):")
             echo ""
             opullpush $msg
             ;;
-        7)
+        8)
             echo "  → git ofetch"
             echo ""
             ofetch
             ;;
-        8)
+        9)
             echo "  → git ostash"
             local confirm
             read -r -p "  ⚠ ostash sẽ stash + drop + clean. Xác nhận? [y/N]: " confirm
@@ -115,39 +121,39 @@ function _oe_run() {
                 echo "  Hủy."
             fi
             ;;
-        9)
+        10)
             echo "  → git oinit"
             local url
             read -r -p "  Remote URL (Enter để dùng placeholder): " url
             echo ""
             oinit $url
             ;;
-        10)
+        11)
             echo "  → git oconfig"
             echo ""
             oconfig
             ;;
-        11)
+        12)
             echo "  → git oconfigclean"
             echo ""
             oconfigclean
             ;;
-        12)
+        13)
             echo "  → git ocreateremote"
             echo ""
             ocreateremote
             ;;
-        13)
+        14)
             echo "  → git addfile omessage"
             echo ""
             addfile omessage
             ;;
-        14)
+        15)
             echo "  → git addfile ogitignore"
             echo ""
             addfile ogitignore
             ;;
-        15)
+        16)
             echo "  → git oclone"
             local dest
             read -r -p "  Thư mục đích (Enter để dùng tên repo): " dest
@@ -177,12 +183,12 @@ function oexecute() {
     while true; do
         _oe_print_menu
 
-        read -r -p "  Chọn số thứ tự [0-15]: " choice
+        read -r -p "  Chọn số thứ tự [0-16]: " choice
 
         # Validate input
-        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 15 )); then
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 16 )); then
             echo ""
-            echo "  ⚠ Nhập số từ 0 đến 15."
+            echo "  ⚠ Nhập số từ 0 đến 16."
             sleep 1
             continue
         fi

@@ -38,6 +38,8 @@
 #   git config --global alias.af             "!source \"$SCRIPT\" && addfile"
 #   git config --global alias.oexecute       "!source \"$SCRIPT\" && oexecute"
 #   git config --global alias.oe             "!source \"$SCRIPT\" && oexecute"
+#   git config --global alias.opullbranch    "!source \"$SCRIPT\" && opullbranch"
+#   git config --global alias.oplb           "!source \"$SCRIPT\" && opullbranch"
 #
 # =============================================================================
 
@@ -61,7 +63,8 @@ function o() {
     echo "  git oexecute          git oe     Menu chọn & chạy lệnh (interactive)"
     echo "  git oaddcommit        git oac    git add -A + auto commit message"
     echo "  git oclone [dir]      git ocl    clone repo từ o.url"
-    echo "  git opull             git opl    pull từ o.url"
+    echo "  git opull             git opl    pull từ o.url (branch hiện tại)"
+    echo "  git opullbranch       git oplb   fetch tất cả remote, chọn branch để pull"
     echo "  git opush             git ops    push lên o.url"
     echo "  git opushforce        git opf    force push lên o.url + o.url0..o.url9"
     echo "  git opushforceurl     git opfurl force push lên một remote URL được chọn"
@@ -503,6 +506,9 @@ _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
 
 [[ -f "${_O_MODULES_DIR}/opushforceurl.sh" ]] \
     && source "${_O_MODULES_DIR}/opushforceurl.sh"
+
+[[ -f "${_O_MODULES_DIR}/opullbranch.sh" ]] \
+    && source "${_O_MODULES_DIR}/opullbranch.sh"
 
 [[ -f "${_O_MODULES_DIR}/oexecute.sh" ]] \
     && source "${_O_MODULES_DIR}/oexecute.sh"

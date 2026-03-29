@@ -38,6 +38,7 @@ $Aliases = @(
     @("oaddcommit", "oaddcommit"),
     @("oclone", "oclone"),
     @("opull", "opull"),
+    @("opullbranch", "opullbranch"),
     @("opush", "opush"),
     @("opushforce", "opushforce"),
     @("opushforceurl", "opushforceurl"),
@@ -54,6 +55,7 @@ $Aliases = @(
     @("oac", "oaddcommit"),
     @("ocl", "oclone"),
     @("opl", "opull"),
+    @("oplb", "opullbranch"),
     @("ops", "opush"),
     @("opf", "opushforce"),
     @("opfurl", "opushforceurl"),
@@ -94,10 +96,11 @@ Write-Host "[setup] Done: $Count aliases dang ky thanh cong."
 Write-Host ""
 Write-Host "  Lenh day du          Viet tat"
 Write-Host "  =============================="
-Write-Host "  git oexecute         git oe     ← Menu chon lenh (MOI)"
+Write-Host "  git oexecute         git oe     ← Menu chon lenh"
 Write-Host "  git oaddcommit       git oac"
 Write-Host "  git oclone           git ocl"
 Write-Host "  git opull            git opl"
+Write-Host "  git opullbranch      git oplb   ← MOI: fetch + chon branch"
 Write-Host "  git opush            git ops"
 Write-Host "  git opushforce       git opf"
 Write-Host "  git opushforceurl    git opfurl"

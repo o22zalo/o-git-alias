@@ -19,6 +19,7 @@ modules/
   ocreateremote.sh        # Module tạo remote repo qua REST API
   oaddfile.sh             # Module tạo file helper (.gitignore, .opushforce.message)
   opushforceurl.sh        # Module force push lên một remote URL được chọn
+  opullbranch.sh          # Module fetch toàn bộ remote, chọn branch để pull
   oexecute.sh             # Module menu tương tác chọn & chạy lệnh
 ```
 
@@ -63,7 +64,8 @@ git oe
 | `git oexecute`            | **Menu tương tác: chọn số → chạy lệnh** (dành khi quên lệnh nào)  |
 | `git oaddcommit [msg]`    | `git add -A` + commit (tự sinh message nếu bỏ trống)               |
 | `git oclone [dir]`        | Clone repo từ `o.url`                                              |
-| `git opull`               | Pull từ `o.url`                                                    |
+| `git opull`               | Pull từ `o.url` (branch hiện tại)                                  |
+| `git opullbranch`         | Fetch tất cả remote, liệt kê branch mới hơn, chọn để pull         |
 | `git opush`               | Push lên `o.url` (branch `main`)                                   |
 | `git opushforce [msg]`    | add → commit → force push lên `o.url` và tất cả `o.url0`..`o.url9` |
 | `git opushforceurl [msg]` | Chọn một remote URL → force push lên đúng URL đó                   |
@@ -83,6 +85,7 @@ git oe
 | `git oac`    | `git oaddcommit`    |
 | `git ocl`    | `git oclone`        |
 | `git opl`    | `git opull`         |
+| `git oplb`   | `git opullbranch`   |
 | `git ops`    | `git opush`         |
 | `git opf`    | `git opushforce`    |
 | `git opfurl` | `git opushforceurl` |
@@ -119,24 +122,25 @@ git oexecute
   │   1   git oaddcommit          git oac    add -A + auto commit
   │   2   git opush               git ops    push lên o.url
   │   3   git opull               git opl    pull từ o.url
-  │   4   git opushforce          git opf    force push tất cả remote
-  │   5   git opushforceurl       git opfurl force push chọn 1 remote
-  │   6   git opullpush           git opp    pull → commit → push
-  │   7   git ofetch              git oft    fetch từ o.url
-  │   8   git ostash              git ost    stash drop + clean
-  │   9   git oinit               git oi     git init + ghi .git/config
-  │  10   git oconfig             git oc     mở .git/config bằng VSCode
-  │  11   git oconfigclean        git occ    xóa alias local .git/config
-  │  12   git ocreateremote       git ocr    tạo remote repo qua API
-  │  13   git addfile omessage    git af     tạo .opushforce.message
-  │  14   git addfile ogitignore  git af     tạo / cập nhật .gitignore
-  │  15   git oclone              git ocl    clone repo từ o.url
+  │   4   git opullbranch         git oplb   fetch tất cả remote, chọn branch
+  │   5   git opushforce          git opf    force push tất cả remote
+  │   6   git opushforceurl       git opfurl force push chọn 1 remote
+  │   7   git opullpush           git opp    pull → commit → push
+  │   8   git ofetch              git oft    fetch từ o.url
+  │   9   git ostash              git ost    stash drop + clean
+  │  10   git oinit               git oi     git init + ghi .git/config
+  │  11   git oconfig             git oc     mở .git/config bằng VSCode
+  │  12   git oconfigclean        git occ    xóa alias local .git/config
+  │  13   git ocreateremote       git ocr    tạo remote repo qua API
+  │  14   git addfile omessage    git af     tạo .opushforce.message
+  │  15   git addfile ogitignore  git af     tạo / cập nhật .gitignore
+  │  16   git oclone              git ocl    clone repo từ o.url
   │
   │   0   Thoát
   │
   └──────────────────────────────────────────────────────────────────
 
-  Chọn số thứ tự [0-15]: _
+  Chọn số thứ tự [0-16]: _
 ```
 
 - Các lệnh cần commit message (oaddcommit, opushforce, v.v.) sẽ được hỏi thêm message ngay sau khi chọn.
@@ -152,10 +156,55 @@ Thay vì dùng `git remote`, bộ alias này đọc `o.url` từ `.git/config` c
 # Remote chính
 git config o.url https://github.com/org/repo.git
 
-# Mirror (tùy chọn) — dùng với opushforce / opushforceurl
+# Mirror (tùy chọn) — dùng với opushforce / opushforceurl / opullbranch
 git config o.url0 https://gitlab.com/org/repo.git
 git config o.url1 https://gitea.myserver.com/org/repo.git
 ```
+
+---
+
+## Fetch branch từ nhiều remote (`opullbranch`)
+
+Dùng khi muốn **xem tất cả branch mới hoặc có commit mới hơn** so với local trên tất cả remote, rồi chọn một để pull về.
+
+```bash
+git opullbranch
+# hoặc viết tắt
+git oplb
+```
+
+**Flow:**
+
+1. Fetch toàn bộ `o.url`, `o.url0`..`o.url9` bằng auth đúng cho từng remote
+2. Quét tất cả branch từ các remote đã fetch, so sánh với local:
+   - **[NEW]** — Branch chưa tồn tại trên local
+   - **[AHEAD +N]** — Remote có N commit mới hơn local
+   - Branch mà local đã up-to-date hoặc mới hơn → không hiển thị
+3. Hiển thị danh sách, chọn branch muốn pull
+4. Thực hiện:
+   - Branch **[NEW]** → `git checkout -b <branch> <remote-ref>`
+   - Branch **[AHEAD]** → switch sang branch đó + `git merge --ff-only`
+
+**Ví dụ output:**
+
+```
+  [fetch] o.url       https://github.com/org/repo.git ... ✓
+  [fetch] o.url0      https://gitlab.com/org/repo.git ... ✓
+
+  Các branch có thể pull:
+
+    #     Branch                          Remote        Trạng thái
+    ────  ──────────────────────────────  ────────────  ──────────────
+    [1]   main                            o.url         [AHEAD +3]
+    [2]   feature/auth                    o.url         [AHEAD +1]
+    [3]   hotfix/login-bug                o.url0        [NEW]
+
+    [0]  Hủy
+
+  Chọn branch [0-3]: _
+```
+
+Remote tạm được tạo trong quá trình fetch và **tự xóa sau khi hoàn thành** — không làm ô nhiễm cấu hình git của repo.
 
 ---
 
@@ -315,3 +364,4 @@ git config o.url https://github.com/myorg/myrepo.git
 - Tất cả lệnh push/pull/fetch/clone đều **không lưu token vào git credential store** — token chỉ tồn tại trong bộ nhớ lúc chạy lệnh.
 - File `.git-o-config` đã được thêm vào `.gitignore` — không bao giờ bị commit nhầm.
 - `alias.sh` dùng `BASH_SOURCE[0]` để tự tìm đường dẫn, không cần chỉnh tay sau khi đăng ký.
+- `opullbranch` dùng remote tạm `_o_tmp_N` trong quá trình fetch, tự dọn sạch sau khi xong — không ảnh hưởng cấu hình git của repo.
