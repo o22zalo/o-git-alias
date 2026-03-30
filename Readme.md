@@ -65,14 +65,14 @@ git oe
 | `git oaddcommit [msg]`    | `git add -A` + commit (tự sinh message nếu bỏ trống)               |
 | `git oclone [dir]`        | Clone repo từ `o.url`                                              |
 | `git opull`               | Pull từ `o.url` (branch hiện tại)                                  |
-| `git opullbranch`         | Fetch tất cả remote, liệt kê branch mới hơn, chọn để lấy nội dung |
+| `git opullbranch`         | Fetch tất cả remote, lấy nội dung branch và hiện commit/source summary |
 | `git opush`               | Push lên `o.url` (branch `main`)                                   |
 | `git opushforce [msg]`    | add → commit → force push lên `o.url` và tất cả `o.url0`..`o.url9` |
 | `git opushforceurl [msg]` | Chọn một remote URL → force push lên đúng URL đó                   |
 | `git opullpush [msg]`     | pull → add → commit → push                                         |
 | `git ostash`              | Stash + drop + clean working dir                                   |
 | `git ofetch`              | Fetch từ `o.url`                                                   |
-| `git oinit [url]`         | `git init` + ghi `.git/config` từ template                         |
+| `git oinit [url]`         | `git init` + ghi `.git/config` + tạo file helper mặc định          |
 | `git oconfig`             | Mở `.git/config` bằng VSCode                                       |
 | `git ocreateremote`       | Tạo remote repo mới qua REST API của provider                      |
 | `git addfile <sub>`       | Tạo file helper cho repo                                           |
@@ -122,13 +122,13 @@ git oexecute
   │   1   git oaddcommit          git oac    add -A + auto commit
   │   2   git opush               git ops    push lên o.url
   │   3   git opull               git opl    pull từ o.url
-  │   4   git opullbranch         git oplb   fetch remote, lấy nội dung branch
+  │   4   git opullbranch         git oplb   fetch remote, lấy nội dung + source summary
   │   5   git opushforce          git opf    force push tất cả remote
   │   6   git opushforceurl       git opfurl force push chọn 1 remote
   │   7   git opullpush           git opp    pull → commit → push
   │   8   git ofetch              git oft    fetch từ o.url
   │   9   git ostash              git ost    stash drop + clean
-  │  10   git oinit               git oi     git init + ghi .git/config
+  │  10   git oinit               git oi     git init + file helper mặc định
   │  11   git oconfig             git oc     mở .git/config bằng VSCode
   │  12   git oconfigclean        git occ    xóa alias local .git/config
   │  13   git ocreateremote       git ocr    tạo remote repo qua API
@@ -185,6 +185,7 @@ git oplb
    - Áp nội dung từ branch đã chọn vào **working tree hiện tại**
    - **Không switch branch**
    - **Không merge commit**
+   - In thêm **latest commit message**, body và vài commit gần nhất của branch nguồn để tham khảo khi commit vào `main`
    - Bạn tự review bằng `git status` / `git diff`, rồi merge hoặc commit sau
 
 **Ví dụ output:**
@@ -351,6 +352,9 @@ Lệnh sẽ:
 
 1. Chạy `git init --initial-branch=main`
 2. Ghi `.git/config` từ `git-config.template`, thay `{{REMOTE_URL}}` bằng URL bạn truyền vào
+3. Tạo `.opushforce.message` trong thư mục hiện tại
+4. Tạo / cập nhật `.gitignore` theo template **Node.js + .NET / C#**
+5. Tự thêm ignore cho `.git-o-config` và `.opushforce.message`
 
 Nếu bỏ trống URL, dùng placeholder — cập nhật sau:
 
@@ -364,7 +368,7 @@ git config o.url https://github.com/myorg/myrepo.git
 ## Ghi chú
 
 - Tất cả lệnh push/pull/fetch/clone đều **không lưu token vào git credential store** — token chỉ tồn tại trong bộ nhớ lúc chạy lệnh.
-- File `.git-o-config` đã được thêm vào `.gitignore` — không bao giờ bị commit nhầm.
+- File `.git-o-config` và `.opushforce.message` sẽ được thêm vào `.gitignore` — không bị commit nhầm.
 - `alias.sh` dùng `BASH_SOURCE[0]` để tự tìm đường dẫn, không cần chỉnh tay sau khi đăng ký.
 - `opullbranch` dùng remote tạm `_o_tmp_N` trong quá trình fetch, tự dọn sạch sau khi xong — không ảnh hưởng cấu hình git của repo.
 - `opullbranch` yêu cầu working tree sạch trước khi áp nội dung branch khác để tránh ghi đè nhầm thay đổi đang làm dở. Riêng `.opushforce.message` sẽ được bỏ qua.

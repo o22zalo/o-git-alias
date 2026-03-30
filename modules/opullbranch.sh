@@ -160,6 +160,85 @@ function _opb_compare_ref() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# HELPER: In block text với indent cố định
+# ---------------------------------------------------------------------------
+function _opb_print_indented_block() {
+    local indent="$1"
+    local text="$2"
+    local line
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        printf "%s%s\n" "$indent" "$line"
+    done <<< "$text"
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Hiển thị commit/source summary để dùng làm commit message
+# ---------------------------------------------------------------------------
+function _opb_print_source_message_hint() {
+    local base_ref="$1"
+    local current_branch="$2"
+    local source_ref="$3"
+    local source_branch="$4"
+    local source_remote_key="${5:-}"
+
+    local latest_hash latest_subject latest_body latest_author latest_date
+    latest_hash=$(git log -1 --format='%h' "$source_ref" 2>/dev/null || true)
+    latest_subject=$(git log -1 --format='%s' "$source_ref" 2>/dev/null || true)
+    latest_body=$(git log -1 --format='%b' "$source_ref" 2>/dev/null || true)
+    latest_author=$(git log -1 --format='%an <%ae>' "$source_ref" 2>/dev/null || true)
+    latest_date=$(git log -1 --date='format-local:%Y-%m-%d %H:%M:%S %z' --format='%ad' "$source_ref" 2>/dev/null || true)
+
+    local commit_count="0"
+    commit_count=$(git rev-list --count "${base_ref}..${source_ref}" 2>/dev/null || echo "0")
+
+    echo "  [source] Thông tin để làm commit message:"
+    printf "  [source] Branch       : %s\n" "$source_branch"
+    [[ -n "$source_remote_key" ]] && printf "  [source] Remote       : %s\n" "$source_remote_key"
+
+    if [[ -n "$latest_subject" ]]; then
+        if [[ -n "$latest_hash" ]]; then
+            printf "  [source] Latest commit: %s  %s\n" "$latest_hash" "$latest_subject"
+        else
+            printf "  [source] Latest commit: %s\n" "$latest_subject"
+        fi
+    fi
+
+    [[ -n "$latest_author" ]] && printf "  [source] Author       : %s\n" "$latest_author"
+    [[ -n "$latest_date" ]] && printf "  [source] Date         : %s\n" "$latest_date"
+
+    if [[ -n "$latest_body" ]]; then
+        echo "  [source] Body:"
+        _opb_print_indented_block "    " "$latest_body"
+    fi
+
+    if [[ "$commit_count" =~ ^[0-9]+$ ]] && (( commit_count > 0 )); then
+        local compare_label="$current_branch"
+        local preview_limit=5
+        local preview_count=0
+        local commit_subject
+
+        [[ -z "$compare_label" || "$compare_label" == "HEAD" ]] && compare_label="HEAD"
+
+        printf "  [source] %d commit(s) chưa có trên %s:\n" "$commit_count" "$compare_label"
+        while IFS= read -r commit_subject; do
+            [[ -z "$commit_subject" ]] && continue
+            printf "    - %s\n" "$commit_subject"
+            (( preview_count++ )) || true
+            (( preview_count >= preview_limit )) && break
+        done < <(git log --format='%s' "${base_ref}..${source_ref}" 2>/dev/null)
+
+        if (( commit_count > preview_limit )); then
+            printf "    ... còn %d commit(s)\n" "$((commit_count - preview_limit))"
+        fi
+    fi
+
+    if [[ -n "$latest_subject" ]]; then
+        echo "  [source] Gợi ý: có thể dùng subject mới nhất cho .opushforce.message hoặc commit trên main."
+    fi
+}
+
 # =============================================================================
 # PUBLIC: opullbranch
 # =============================================================================
@@ -334,6 +413,7 @@ function opullbranch() {
     local sel_idx=$(( choice - 1 ))
     local sel_branch="${item_branch[$sel_idx]}"
     local sel_ref="${item_ref[$sel_idx]}"
+    local sel_url_key="${item_url_key[$sel_idx]}"
     local sel_status="${item_status[$sel_idx]}"
 
     echo ""
@@ -347,6 +427,8 @@ function opullbranch() {
         echo "  ✓ Đã lấy nội dung branch về working tree."
         echo "  ✓ Chưa merge, chưa tạo commit nào."
         echo "  [opullbranch] Xem thay đổi bằng: git status / git diff"
+        echo ""
+        _opb_print_source_message_hint "HEAD" "$current_branch" "$sel_ref" "$sel_branch" "$sel_url_key"
     else
         echo ""
         echo "  ✗ Không thể áp nội dung branch vào working tree." >&2

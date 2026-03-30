@@ -64,14 +64,14 @@ function o() {
     echo "  git oaddcommit        git oac    git add -A + auto commit message"
     echo "  git oclone [dir]      git ocl    clone repo từ o.url"
     echo "  git opull             git opl    pull từ o.url (branch hiện tại)"
-    echo "  git opullbranch       git oplb   fetch remote, chọn branch để lấy nội dung"
+    echo "  git opullbranch       git oplb   fetch remote, lấy nội dung + source summary"
     echo "  git opush             git ops    push lên o.url"
     echo "  git opushforce        git opf    force push lên o.url + o.url0..o.url9"
     echo "  git opushforceurl     git opfurl force push lên một remote URL được chọn"
     echo "  git opullpush         git opp    pull → commit → push"
     echo "  git ostash            git ost    stash drop + clean working dir"
     echo "  git ofetch            git oft    fetch từ o.url"
-    echo "  git oinit [url]       git oi     git init + ghi sẵn .git/config chuẩn"
+    echo "  git oinit [url]       git oi     git init + ghi .git/config + file helper"
     echo "  git oconfig           git oc     mở .git/config bằng VSCode"
     echo "  git oconfigclean      git occ    xóa alias local trong .git/config"
     echo "  git ocreateremote     git ocr    tạo remote repo mới qua API provider"
@@ -470,6 +470,8 @@ function oinit() {
     local remote_url="${1:-oremoteUrl}"
     local template_file="${_O_SCRIPT_DIR}/git-config.template"
     local git_config=".git/config"
+    local omessage_file=".opushforce.message"
+    local gitignore_file=".gitignore"
 
     if [[ ! -f "$template_file" ]]; then
         echo "[oinit] ERROR: Không tìm thấy template: $template_file" >&2
@@ -484,6 +486,34 @@ function oinit() {
     echo "[oinit] ✓ git init xong"
     echo "[oinit] ✓ .git/config ghi từ template: $(basename "$template_file")"
     echo "[oinit]   o.url = ${remote_url}"
+
+    if declare -F _oaf_ensure_omessage_file >/dev/null 2>&1; then
+        if _oaf_ensure_omessage_file "$omessage_file"; then
+            echo "[oinit] ✓ Đã tạo $omessage_file"
+        else
+            echo "[oinit] • Đã có sẵn $omessage_file"
+        fi
+    else
+        if [[ ! -f "$omessage_file" ]]; then
+            touch "$omessage_file"
+            echo "[oinit] ✓ Đã tạo $omessage_file"
+        else
+            echo "[oinit] • Đã có sẵn $omessage_file"
+        fi
+    fi
+
+    echo "[oinit] → Tạo / cập nhật $gitignore_file (Node.js + .NET / C#)..."
+    if declare -F _oaf_apply_gitignore_profile >/dev/null 2>&1; then
+        _oaf_apply_gitignore_profile "$gitignore_file" "both"
+    else
+        [[ -f "$gitignore_file" ]] || touch "$gitignore_file"
+        if ! grep -qxF ".git-o-config" "$gitignore_file" 2>/dev/null; then
+            echo ".git-o-config" >> "$gitignore_file"
+        fi
+        if ! grep -qxF ".opushforce.message" "$gitignore_file" 2>/dev/null; then
+            echo ".opushforce.message" >> "$gitignore_file"
+        fi
+    fi
 
     if [[ "$remote_url" == "oremoteUrl" ]]; then
         echo "[oinit]   Hãy cập nhật remote URL:"

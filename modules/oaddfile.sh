@@ -5,7 +5,7 @@
 #
 # Lệnh:
 #   git addfile omessage    — Tạo .opushforce.message nếu chưa có
-#   git addfile ogitignore  — Tạo / append .gitignore (Node.js hoặc .NET)
+#   git addfile ogitignore  — Tạo / append .gitignore (Node.js, .NET hoặc cả hai)
 # =============================================================================
 
 [[ -n "${_O_MODULE_ADDFILE_LOADED:-}" ]] && return 0
@@ -224,6 +224,13 @@ coverage/
 .nyc_output/'
 
 # ---------------------------------------------------------------------------
+# TEMPLATE: Helper files của Git O-Alias
+# ---------------------------------------------------------------------------
+_O_GITIGNORE_O_ALIAS_HELPERS='# ── Git O-Alias helpers ───────────────────────
+.git-o-config
+.opushforce.message'
+
+# ---------------------------------------------------------------------------
 # HELPER: Kiểm tra một pattern đã có trong .gitignore chưa
 # ---------------------------------------------------------------------------
 function _oaf_already_has() {
@@ -265,20 +272,95 @@ function _oaf_append_gitignore() {
 }
 
 # ---------------------------------------------------------------------------
+# HELPER: Đảm bảo .gitignore có ignore cho các file helper của Git O-Alias
+# ---------------------------------------------------------------------------
+function _oaf_ensure_o_alias_ignores() {
+    local file="$1"
+
+    [[ -f "$file" ]] || touch "$file"
+
+    if _oaf_already_has "$file" ".git-o-config" \
+       && _oaf_already_has "$file" ".opushforce.message"; then
+        echo "  ✓ Git O-Alias helper ignore đã có sẵn."
+        return 0
+    fi
+
+    _oaf_append_gitignore "$file" "$_O_GITIGNORE_O_ALIAS_HELPERS"
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Apply template .gitignore theo profile
+#   nodejs | dotnet | both
+# ---------------------------------------------------------------------------
+function _oaf_apply_gitignore_profile() {
+    local file="$1"
+    local profile="$2"
+    local label=""
+    local template=""
+
+    case "$profile" in
+        1|node|nodejs)
+            label="Node.js"
+            template="$_O_GITIGNORE_NODEJS"
+            ;;
+        2|dotnet|csharp|c#)
+            label=".NET / C#"
+            template="$_O_GITIGNORE_DOTNET"
+            ;;
+        3|both|fullstack)
+            label="Node.js + .NET / C#"
+            template="$_O_GITIGNORE_BOTH"
+            ;;
+        *)
+            echo "[addfile ogitignore] ERROR: Profile không hợp lệ: '$profile'" >&2
+            return 1
+            ;;
+    esac
+
+    [[ -f "$file" ]] || touch "$file"
+
+    echo "  Đang thêm template ${label}..."
+    _oaf_append_gitignore "$file" "$template"
+
+    echo "  Đang thêm helper ignore (.git-o-config, .opushforce.message)..."
+    _oaf_ensure_o_alias_ignores "$file"
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Tạo .opushforce.message nếu chưa có
+# ---------------------------------------------------------------------------
+function _oaf_ensure_omessage_file() {
+    local target="${1:-.opushforce.message}"
+
+    if [[ -f "$target" ]]; then
+        return 1
+    fi
+
+    touch "$target"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # SUB-COMMAND: omessage
 # Tạo .opushforce.message trong CWD nếu chưa có
 # ---------------------------------------------------------------------------
 function _oaf_omessage() {
     local target=".opushforce.message"
 
-    if [[ -f "$target" ]]; then
+    if ! _oaf_ensure_omessage_file "$target"; then
         echo "[addfile omessage] Đã tồn tại: $PWD/$target — bỏ qua."
         return 0
     fi
 
-    touch "$target"
     echo "[addfile omessage] ✓ Đã tạo: $PWD/$target"
     echo "[addfile omessage]   Ghi message vào file trước khi chạy git opushforce."
+
+    if [[ -f ".gitignore" ]]; then
+        echo "[addfile omessage]   Cập nhật .gitignore để ignore file message."
+        _oaf_ensure_o_alias_ignores ".gitignore"
+    else
+        echo "[addfile omessage]   Chưa có .gitignore — khi chạy git addfile ogitignore sẽ thêm rule ignore sẵn."
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -330,24 +412,16 @@ function _oaf_ogitignore() {
         return 0
     fi
 
-    # Tạo file mới nếu chưa có
-    if (( is_new )); then
-        touch "$target"
-    fi
-
     echo ""
     case "$choice" in
         1)
-            echo "  Đang thêm template Node.js..."
-            _oaf_append_gitignore "$target" "$_O_GITIGNORE_NODEJS"
+            _oaf_apply_gitignore_profile "$target" "nodejs"
             ;;
         2)
-            echo "  Đang thêm template .NET / C#..."
-            _oaf_append_gitignore "$target" "$_O_GITIGNORE_DOTNET"
+            _oaf_apply_gitignore_profile "$target" "dotnet"
             ;;
         3)
-            echo "  Đang thêm template Node.js + .NET..."
-            _oaf_append_gitignore "$target" "$_O_GITIGNORE_BOTH"
+            _oaf_apply_gitignore_profile "$target" "both"
             ;;
     esac
 
