@@ -53,7 +53,13 @@ function readClipboardText() {
 }
 
 function stripCodeFence(raw) {
-  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  // Một số nguồn copy trả về text 1 dòng có chứa ký tự escape "\n".
+  // Nếu không có newline thật mà có "\\n" thì convert sang newline thật để parse ổn định.
+  const normalizedRaw = (!raw.includes('\n') && raw.includes('\\n'))
+    ? raw.replace(/\\n/g, '\n')
+    : raw;
+
+  const lines = normalizedRaw.replace(/\r\n/g, '\n').split('\n');
   if (lines.length === 0) return '';
 
   if (lines[0].trim().startsWith('```')) lines.shift();
@@ -112,17 +118,6 @@ async function choosePath(candidates) {
   return candidates[idx];
 }
 
-function removePathHeader(lines, selectedPath) {
-  if (lines.length === 0) return lines;
-
-  const firstLine = lines[0];
-  const m = firstLine.match(/^\s*\/\/\s*(?:path|file)\s*:\s*(.+?)\s*$/i);
-  if (!m) return lines;
-  if (m[1].trim() !== selectedPath.trim()) return lines;
-
-  return lines.slice(1);
-}
-
 function writeFileFromClipboard(selectedPath, lines) {
   const relativePath = normalizePathInput(selectedPath);
   const outPath = path.resolve(process.cwd(), relativePath);
@@ -150,8 +145,8 @@ async function run() {
     } else {
       const selectedPath = await choosePath(payload.candidates);
       if (selectedPath) {
-        const bodyLines = removePathHeader(payload.lines, selectedPath);
-        const outPath = writeFileFromClipboard(selectedPath, bodyLines);
+        // Giữ nguyên header "// Path: ..." trong file output để tránh mất metadata đường dẫn.
+        const outPath = writeFileFromClipboard(selectedPath, payload.lines);
         console.log(`${LOG} Đã ghi nội dung clipboard vào: ${outPath}`);
       } else {
         console.log(`${LOG} Hủy thao tác ghi file.`);
