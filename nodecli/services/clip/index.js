@@ -12,11 +12,23 @@ const LOG = '[clip]';
 
 function readClipboardText() {
   if (process.platform === 'win32') {
-    const ps = spawn('powershell', ['-NoProfile', '-Command', 'Get-Clipboard -Raw']);
+    // Dùng base64 để tránh lỗi encoding UTF-16/UTF-8 khi đọc tiếng Việt từ PowerShell.
+    const ps = spawn('powershell', [
+      '-NoProfile',
+      '-Command',
+      '$t = Get-Clipboard -Raw; if ($null -eq $t) { $t = "" }; [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($t))',
+    ]);
     if (!ps.ok) {
       throw new Error(`${LOG} Không đọc được clipboard bằng PowerShell: ${ps.stderr}`);
     }
-    return ps.stdout;
+
+    if (!ps.stdout) return '';
+
+    try {
+      return Buffer.from(ps.stdout, 'base64').toString('utf8');
+    } catch {
+      throw new Error(`${LOG} Clipboard trả về dữ liệu không hợp lệ (base64 decode thất bại).`);
+    }
   }
 
   if (commandExists('pbpaste')) {
@@ -74,6 +86,8 @@ function normalizePathInput(p) {
 }
 
 function extractPayload(clipboardText) {
+  if (!clipboardText || !clipboardText.trim()) return null;
+
   const normalized = stripCodeFence(clipboardText);
   if (!normalized) return null;
 
@@ -131,7 +145,8 @@ async function run() {
 
     const payload = extractPayload(clip);
     if (!payload) {
-      console.log(`${LOG} Clipboard không đúng định dạng nghiệp vụ (không tìm thấy path ở 3 dòng đầu).`);
+      console.log(`${LOG} Clipboard chưa đúng định dạng cho nghiệp vụ hiện tại (không tìm thấy path hợp lệ trong 3 dòng đầu).`);
+      console.log(`${LOG} Ví dụ header hợp lệ: // Path: src/queue/JobQueue.js`);
     } else {
       const selectedPath = await choosePath(payload.candidates);
       if (selectedPath) {
@@ -142,6 +157,8 @@ async function run() {
         console.log(`${LOG} Hủy thao tác ghi file.`);
       }
     }
+
+    console.log('');
 
     const shouldContinue = await confirm('Bạn có muốn tiếp tục chạy nghiệp vụ ocli clip không?', true);
     if (!shouldContinue) break;
