@@ -1,16 +1,5 @@
 # USER_CHANGELOG — nodecli / ocli
 
-## 2026-04-03 — Fix ocli clip: giữ lại dòng Path và hỗ trợ input `\\n`
-
-**Yêu cầu:** Sửa lỗi mất dòng `// Path: ...` khi ghi file từ clipboard, đồng thời xử lý trường hợp clipboard chứa ký tự escape `\\n` thay vì xuống dòng thật.
-
-### Những gì đã làm
-
-- Cập nhật `nodecli/services/clip/index.js` để **không loại bỏ** header path khi ghi file.
-- Bổ sung normalize input: nếu clipboard chỉ có 1 dòng nhưng chứa `\\n`, tự convert thành newline thật trước khi parse.
-
----
-
 ## 2026-04-03 — Thêm subcommand ocli clip — clipboard → file
 
 **Yêu cầu:** Thêm nghiệp vụ đầu tiên cho `ocli clip`: đọc clipboard, nhận diện path trong 3 dòng đầu theo comment `//`, ghi nội dung vào file theo cwd, xử lý trường hợp nhiều path và hỏi chạy tiếp vòng tiếp theo.
