@@ -160,6 +160,66 @@ function _opb_compare_ref() {
     fi
 }
 
+
+# ---------------------------------------------------------------------------
+# HELPER: Ghi thông tin cập nhật branch vào đầu file .opushforce.message
+# ---------------------------------------------------------------------------
+function _opb_prepend_update_to_message_file() {
+    local repo_root="$1"
+    local base_ref="$2"
+    local source_ref="$3"
+    local source_branch="$4"
+    local source_remote_key="${5:-}"
+
+    local message_file="${repo_root}/.opushforce.message"
+    local now
+    now=$(date '+%Y-%m-%d %H:%M:%S %z')
+
+    local latest_subject latest_hash commit_count
+    latest_subject=$(git log -1 --format='%s' "$source_ref" 2>/dev/null || true)
+    latest_hash=$(git log -1 --format='%h' "$source_ref" 2>/dev/null || true)
+    commit_count=$(git rev-list --count "${base_ref}..${source_ref}" 2>/dev/null || echo "0")
+
+    local -a lines=()
+    lines+=("[opullbranch] ${now}")
+    lines+=("source_branch=${source_branch}")
+    [[ -n "$source_remote_key" ]] && lines+=("source_remote=${source_remote_key}")
+    lines+=("commits_ahead=${commit_count}")
+    [[ -n "$latest_hash" || -n "$latest_subject" ]] && lines+=("latest_commit=${latest_hash} ${latest_subject}")
+    lines+=("changes:")
+
+    local added_any=0
+    local subject
+    while IFS= read -r subject; do
+        [[ -z "$subject" ]] && continue
+        lines+=("- ${subject}")
+        added_any=1
+    done < <(git log --format='%s' "${base_ref}..${source_ref}" 2>/dev/null)
+
+    if (( ! added_any )); then
+        lines+=("- (không có commit mới so với ${base_ref})")
+    fi
+
+    lines+=("")
+
+    local tmp_file
+    tmp_file=$(mktemp)
+
+    {
+        local l
+        for l in "${lines[@]}"; do
+            printf '%s\n' "$l"
+        done
+
+        if [[ -f "$message_file" ]]; then
+            cat "$message_file"
+        fi
+    } > "$tmp_file"
+
+    mv "$tmp_file" "$message_file"
+
+    echo "  ✓ Đã cập nhật vào đầu file .opushforce.message"
+}
 # ---------------------------------------------------------------------------
 # HELPER: In block text với indent cố định
 # ---------------------------------------------------------------------------
@@ -429,6 +489,7 @@ function opullbranch() {
         echo "  [opullbranch] Xem thay đổi bằng: git status / git diff"
         echo ""
         _opb_print_source_message_hint "HEAD" "$current_branch" "$sel_ref" "$sel_branch" "$sel_url_key"
+        _opb_prepend_update_to_message_file "$repo_root" "HEAD" "$sel_ref" "$sel_branch" "$sel_url_key"
     else
         echo ""
         echo "  ✗ Không thể áp nội dung branch vào working tree." >&2
