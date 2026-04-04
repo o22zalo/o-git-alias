@@ -67,6 +67,7 @@ flowchart TB
     GH --> CFG
 
     AZ --> AZVAR[services/azure/variables.js\nList/Set/Delete variables]
+    AZ --> AZCP[services/azure/createPipeline.js\nTạo pipeline từ YAML]
     AZ --> PR
     AZ --> CFG
     AZ --> API
@@ -122,7 +123,7 @@ sequenceDiagram
     GH-->>User: Render kết quả
 ```
 
-### 3) Sequence cho `ocli azure` (Pipeline Variables)
+### 3) Sequence cho `ocli azure` (Pipeline Variables + Create Pipeline)
 
 ```mermaid
 sequenceDiagram
@@ -132,6 +133,7 @@ sequenceDiagram
     participant Cfg as lib/config.js
     participant Prompt as lib/prompt.js
     participant AZ as services/azure/index.js
+    participant CP as services/azure/createPipeline.js
     participant Var as services/azure/variables.js
     participant Api as lib/azureApi.js
     participant ADO as Azure DevOps REST API
@@ -141,27 +143,38 @@ sequenceDiagram
     Cfg-->>OCLI: Account dev.azure.com/* + headers
     OCLI->>AZ: run(ctx)
 
-    AZ->>Prompt: Chọn org/project/pipeline/action
+    AZ->>Prompt: Chọn org/project
     Prompt-->>AZ: User selection
 
-    alt List variables
-        AZ->>Var: listVariables(pipelineId)
-        Var->>Api: request(GET definition)
-        Api->>ADO: GET build/definitions/{id}
-        ADO-->>Api: definition.variables
-        Api-->>Var: data
-        Var-->>AZ: rendered variables
-    else Set 1 variable
-        AZ->>Var: upsertVariable(name, value, isSecret, allowOverride)
-        Var->>Api: GET definition
-        Var->>Api: PUT definition (variables updated)
-        Api->>ADO: PUT build/definitions/{id}
-    else Set batch (JSON/.env)
-        AZ->>Var: applyFileVariables(filePath)
-        Var->>Api: GET + PUT definition
-    else Delete variable
-        AZ->>Var: removeVariable(name)
-        Var->>Api: GET + PUT definition
+    loop Chọn pipeline action
+        AZ->>Prompt: Chọn flow (hiện có / tạo mới)
+
+        alt Chọn pipeline hiện có
+            AZ->>Api: GET build/definitions
+            Api->>ADO: list pipelines
+            ADO-->>Api: definitions[]
+            Api-->>AZ: pipelines
+            AZ->>Prompt: Chọn pipeline
+        else Tạo pipeline mới
+            AZ->>CP: run(org, project, account)
+            CP->>Api: GET git/repositories
+            CP->>Api: GET git/items (YAML files)
+            CP->>Prompt: Chọn repo + YAML + tên
+            CP->>Api: POST build/definitions
+            Api->>ADO: tạo pipeline
+            ADO-->>Api: created definition
+            CP-->>AZ: {id, name}
+        end
+
+        loop Chọn nghiệp vụ
+            AZ->>Var: run(org, project, pipeline, account)
+            alt List variables
+                Var->>Api: GET definition
+            else Set / Delete
+                Var->>Api: GET definition
+                Var->>Api: PUT definition (variables updated)
+            end
+        end
     end
 
     AZ-->>User: Render kết quả
@@ -177,7 +190,8 @@ sequenceDiagram
 | `lib/shell.js` | Chạy command shell (đặc biệt cho `gh`) | Input: command/env, Output: stdout/stderr/exitCode |
 | `lib/azureApi.js` | HTTP client tối giản cho Azure DevOps | Input: method/url/body/headers, Output: JSON response |
 | `services/gh/*` | Nghiệp vụ GitHub secrets | Input: token/repo/file, Output: danh sách/trạng thái secrets |
-| `services/azure/*` | Nghiệp vụ Azure pipeline variables | Input: org/project/pipeline/vars, Output: definition đã cập nhật |
+| `services/azure/createPipeline.js` | Tạo YAML pipeline từ repo | Input: org/project/repo/yaml, Output: {id, name} pipeline mới |
+| `services/azure/variables.js` | Nghiệp vụ Azure pipeline variables | Input: org/project/pipeline/vars, Output: definition đã cập nhật |
 
 ---
 
@@ -249,11 +263,11 @@ Flow:
 1. Chọn account dev.azure.com/* từ .git-o-config
 2. Lấy danh sách project → chọn project
    (Nếu section config dạng [dev.azure.com/org/project] → tự động dùng project đó)
-3. Chọn flow:
+3. Vòng lặp chọn flow:
    - Chọn pipeline hiện có để quản lý variables
    - Tạo pipeline mới từ file YAML trong repo
 4. Nếu tạo mới: chọn repo → chọn file `.yml/.yaml` từ repo → nhập tên pipeline → tạo pipeline
-5. Chọn nghiệp vụ: Variables
+5. Chọn nghiệp vụ: Variables (quay lại bước 3 khi thoát)
 
 Variables — các thao tác hỗ trợ:
 - Xem danh sách variables (hiển thị tên, isSecret, giá trị)

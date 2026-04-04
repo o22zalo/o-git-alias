@@ -1,6 +1,6 @@
 {
   "name": "ocli",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "O-Alias Node CLI — thao tác với GitHub, Azure và các provider qua .git-o-config",
   "private": true,
   "bin": {

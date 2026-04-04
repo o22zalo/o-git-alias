@@ -1,6 +1,6 @@
 // services/azure/index.js — Subcommand `ocli azure`
 // Flow: chọn account Azure từ .git-o-config
-//       → chọn project → chọn pipeline → chọn nghiệp vụ
+//       → chọn project → (loop) chọn flow pipeline → chọn nghiệp vụ
 
 'use strict';
 
@@ -13,7 +13,7 @@ const createPipeline = require('./createPipeline');
 const LOG = '[azure]';
 
 // ─────────────────────────────────────────────────────────────────
-// Lấy danh sách projects
+// Lấy danh sách projects trong org
 // ─────────────────────────────────────────────────────────────────
 
 async function listProjects(org, account) {
@@ -130,76 +130,86 @@ async function run() {
 
   console.log(`\n${LOG} Project: ${selectedProject}`);
 
-  // ── Bước 3: Chọn flow pipeline ────────────────────────────────────
-  const flowIdx = await selectMenu(
-    `Pipeline action — ${selectedProject}`,
-    [
-      { label: 'Chọn pipeline hiện có để quản lý variables' },
-      { label: 'Tạo pipeline mới từ file YAML trong repo' },
-    ]
-  );
-  if (flowIdx === -1) return;
+  // ── Bước 3: Vòng lặp chọn flow pipeline ──────────────────────────
+  //
+  // Cho phép user quay lại chọn pipeline khác hoặc tạo pipeline mới
+  // sau khi thoát khỏi menu nghiệp vụ (thay vì thoát hẳn).
 
-  let selectedPipeline;
-  if (flowIdx === 0) {
-    let pipelines = [];
-    try {
-      console.log(`${LOG} Đang lấy danh sách pipeline...`);
-      pipelines = await listPipelines(org, selectedProject, account);
-    } catch (e) {
-      console.error(e.message);
-      process.exit(1);
-    }
-
-    if (pipelines.length === 0) {
-      console.log(`${LOG} Project không có pipeline nào.`);
-      return;
-    }
-
-    const pipelineIdx = await selectMenu(
-      `Chọn pipeline — ${selectedProject} (${pipelines.length} pipeline)`,
-      [
-        ...pipelines.map((p) => ({
-          label: `[${String(p.id).padStart(4)}]  ${p.name}`,
-        })),
-        { label: '✏  Nhập ID pipeline thủ công' },
-      ]
-    );
-
-    if (pipelineIdx === -1) return;
-
-    if (pipelineIdx === pipelines.length) {
-      const idStr = await ask('  Pipeline ID (số)');
-      const id = parseInt(idStr, 10);
-      if (isNaN(id)) { console.log('  ID không hợp lệ.'); return; }
-      selectedPipeline = { id, name: `pipeline-${id}` };
-    } else {
-      selectedPipeline = {
-        id:   pipelines[pipelineIdx].id,
-        name: pipelines[pipelineIdx].name,
-      };
-    }
-  } else {
-    selectedPipeline = await createPipeline.run(org, selectedProject, account);
-    if (!selectedPipeline) return;
-  }
-
-  console.log(`\n${LOG} Pipeline: ${selectedPipeline.name} (id=${selectedPipeline.id})`);
-
-  // ── Bước 4: Chọn nghiệp vụ ────────────────────────────────────────
   while (true) {
-    const featureIdx = await selectMenu(
-      `Chọn nghiệp vụ — ${selectedPipeline.name}`,
+    const flowIdx = await selectMenu(
+      `Pipeline action — ${selectedProject}`,
       [
-        { label: 'Variables — thêm/xem/xóa pipeline variables' },
-        // Thêm nghiệp vụ mới ở đây
+        { label: 'Chọn pipeline hiện có để quản lý variables' },
+        { label: 'Tạo pipeline mới từ file YAML trong repo' },
       ]
     );
+    if (flowIdx === -1) break;  // Thoát khỏi vòng lặp → kết thúc subcommand
 
-    if (featureIdx === -1) break;
+    let selectedPipeline;
 
-    if (featureIdx === 0) {
-      await variables.run(org, selectedProject, selectedPipeline, account);
+    if (flowIdx === 0) {
+      // ── Chọn pipeline hiện có ────────────────────────────────────
+      let pipelines = [];
+      try {
+        console.log(`${LOG} Đang lấy danh sách pipeline...`);
+        pipelines = await listPipelines(org, selectedProject, account);
+      } catch (e) {
+        console.error(e.message);
+        continue;  // Quay lại menu chọn flow
+      }
+
+      if (pipelines.length === 0) {
+        console.log(`${LOG} Project không có pipeline nào.`);
+        continue;
+      }
+
+      const pipelineIdx = await selectMenu(
+        `Chọn pipeline — ${selectedProject} (${pipelines.length} pipeline)`,
+        [
+          ...pipelines.map((p) => ({
+            label: `[${String(p.id).padStart(4)}]  ${p.name}`,
+          })),
+          { label: '✏  Nhập ID pipeline thủ công' },
+        ]
+      );
+
+      if (pipelineIdx === -1) continue;  // Quay lại menu chọn flow
+
+      if (pipelineIdx === pipelines.length) {
+        const idStr = await ask('  Pipeline ID (số)');
+        const id = parseInt(idStr, 10);
+        if (isNaN(id)) { console.log('  ID không hợp lệ.'); continue; }
+        selectedPipeline = { id, name: `pipeline-${id}` };
+      } else {
+        selectedPipeline = {
+          id:   pipelines[pipelineIdx].id,
+          name: pipelines[pipelineIdx].name,
+        };
+      }
+
+    } else {
+      // ── Tạo pipeline mới ─────────────────────────────────────────
+      selectedPipeline = await createPipeline.run(org, selectedProject, account);
+      if (!selectedPipeline) continue;  // Tạo thất bại hoặc user hủy → quay lại
+    }
+
+    console.log(`\n${LOG} Pipeline: ${selectedPipeline.name} (id=${selectedPipeline.id})`);
+
+    // ── Bước 4: Vòng lặp chọn nghiệp vụ ──────────────────────────
+    while (true) {
+      const featureIdx = await selectMenu(
+        `Chọn nghiệp vụ — ${selectedPipeline.name}`,
+        [
+          { label: 'Variables — thêm/xem/xóa pipeline variables' },
+          // Thêm nghiệp vụ mới ở đây
+        ]
+      );
+
+      if (featureIdx === -1) break;  // Quay lại vòng lặp chọn pipeline
+
+      if (featureIdx === 0) {
+        await variables.run(org, selectedProject, selectedPipeline, account);
+      }
     }
   }
 }

@@ -130,7 +130,7 @@ function collectPathCandidates(lines) {
 }
 
 function sanitizeRelativePath(p) {
-  const stripped = p.trim().replace(/^['"“”‘’]|['"“”‘’]$/g, '');
+  const stripped = p.trim().replace(/^['"""'']|['"""'']$/g, '');
   return stripped.replace(/\\/g, '/').split('/').filter(Boolean).join(path.sep);
 }
 

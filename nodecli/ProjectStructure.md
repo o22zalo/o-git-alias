@@ -23,10 +23,14 @@ nodecli/
 │   ├── gh/                     Subcommand ocli gh — GitHub (qua gh CLI + .git-o-config)
 │   │   ├── index.js            Flow: chọn account → list repo → chọn repo → chọn nghiệp vụ
 │   │   └── secrets.js          Nghiệp vụ: list / set / set-from-file / delete repo secrets
-│   └── azure/                  Subcommand ocli azure — Azure DevOps (REST API)
-│       ├── index.js            Flow: chọn account → chọn project → chọn flow pipeline → chọn nghiệp vụ
-│       ├── createPipeline.js   Nghiệp vụ: tạo pipeline mới từ YAML trong repo
-│       └── variables.js        Nghiệp vụ: list / set / set-from-file / delete pipeline variables
+│   ├── azure/                  Subcommand ocli azure — Azure DevOps (REST API)
+│   │   ├── index.js            Flow: chọn account → chọn project → (loop) chọn flow pipeline → chọn nghiệp vụ
+│   │   ├── createPipeline.js   Nghiệp vụ: tạo pipeline mới từ YAML trong repo
+│   │   └── variables.js        Nghiệp vụ: list / set / set-from-file / delete pipeline variables
+│   ├── clip/                   Subcommand ocli clip — clipboard → file theo header path
+│   │   └── index.js            Flow: đọc clipboard → parse path → ghi file → hỏi tiếp tục
+│   └── addfiles/               Subcommand ocli addfiles — file/zip → cwd theo header path
+│       └── index.js            Flow: nhận file/zip → staging → parse // Path: → ghi/move → báo cáo
 │
 ├── templates/                  File mẫu để user điền và truyền vào khi thao tác hàng loạt
 │   ├── gh-secrets.json         Mẫu JSON: key=value string
@@ -59,6 +63,14 @@ lib/config.js → sections[]
             │  → lib/azureApi.js → https → dev.azure.com REST API
             ├── services/azure/createPipeline.js
             └── services/azure/variables.js
+
+Clipboard (OS):
+      │
+      └── services/clip/index.js    pbpaste / xclip / PowerShell Get-Clipboard
+
+File / ZIP input:
+      │
+      └── services/addfiles/index.js  unzip/tar/PowerShell → staging → cwd
 ```
 
 ---
@@ -73,6 +85,8 @@ lib/config.js → sections[]
 | services/azure/index.js | lib/config, lib/prompt, lib/azureApi, services/azure/variables, services/azure/createPipeline | Các service khác |
 | services/azure/createPipeline.js | lib/azureApi, lib/prompt | lib/config, lib/shell |
 | services/azure/variables.js | lib/azureApi, lib/prompt | lib/config, lib/shell |
+| services/clip/index.js | lib/shell, lib/prompt | lib/config, lib/azureApi |
+| services/addfiles/index.js | lib/shell, lib/prompt | lib/config, lib/azureApi |
 | lib/config.js | fs, path, os (built-in) | Không có |
 | lib/prompt.js | readline (built-in) | Không có |
 | lib/shell.js | child_process (built-in) | Không có |
@@ -101,6 +115,7 @@ nodecli/services/azure/index.js
 nodecli/services/azure/createPipeline.js
 nodecli/services/azure/variables.js
 nodecli/services/clip/index.js
+nodecli/services/addfiles/index.js
 nodecli/templates/gh-secrets.json
 nodecli/templates/gh-secrets.env.example
 nodecli/templates/azure-pipeline-vars.json

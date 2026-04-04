@@ -1,5 +1,31 @@
 # USER_CHANGELOG — nodecli / ocli
 
+## 2026-04-04 — Fix createPipeline + azure/index: UX, API correctness, ProjectStructure
+
+**Loại:** Bugfix + UX improvement
+
+### Những gì đã sửa
+
+**`services/azure/createPipeline.js`:**
+- Hardcode `type: 'TfsGit'` thay vì dùng `selectedRepo.type` — giá trị từ Git Repositories API không ánh xạ 1-1 sang build definition type; `TfsGit` là giá trị đúng cho Azure Repos Git
+- Đổi `recursionLevel=Full` → `recursionLevel=full` theo đúng enum của Azure DevOps Items API
+- Guard `defaultBranch`: xử lý trường hợp repo mới tạo có `defaultBranch` là empty string → fallback `refs/heads/main`
+- Thêm auto-prefix `/` khi user nhập path YAML thủ công thiếu dấu `/` đầu
+- Thêm thông báo rõ ràng khi repo không có file YAML (vẫn cho nhập tay thay vì thoát luôn)
+
+**`services/azure/index.js`:**
+- Bọc bước chọn flow pipeline trong `while (true)` — sau khi thoát menu nghiệp vụ, user được quay lại chọn pipeline khác hoặc tạo pipeline mới thay vì thoát hẳn subcommand
+- Lỗi lấy danh sách pipeline → `continue` quay lại menu, không `process.exit(1)`
+
+**`ProjectStructure.md`:**
+- Thêm `nodecli/services/addfiles/index.js` vào sơ đồ thư mục, bảng phụ thuộc, và danh sách file ZIP (đã bị thiếu từ lần thêm subcommand `addfiles`)
+- Thêm `services/clip` và `services/addfiles` vào bảng phụ thuộc
+
+**`package.json`:**
+- Bump version `1.0.0` → `1.3.0` phản ánh đúng số lần thêm minor feature (azure, clip, addfiles, createPipeline)
+
+---
+
 ## 2026-04-03 — Thêm tính năng tạo Azure Pipeline từ YAML trong repo
 
 **Yêu cầu:** Trong `ocli azure`, thêm nghiệp vụ tạo pipeline mới, source YAML được chọn trực tiếp từ repository.

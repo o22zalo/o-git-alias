@@ -8,6 +8,10 @@ const { ask, selectMenu, confirm } = require('../../lib/prompt');
 const LOG = '[azure:createPipeline]';
 const API_VERSION = '7.1';
 
+// ─────────────────────────────────────────────────────────────────
+// Lấy danh sách Git repositories trong project
+// ─────────────────────────────────────────────────────────────────
+
 async function listRepositories(org, project, account) {
   const res = await azureRequest({
     method: 'GET',
@@ -24,11 +28,16 @@ async function listRepositories(org, project, account) {
   return (res.data && res.data.value) || [];
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Quét toàn bộ file *.yml / *.yaml trong repo
+// recursionLevel=full (lowercase) là giá trị đúng theo Azure DevOps API
+// ─────────────────────────────────────────────────────────────────
+
 async function listYamlFiles(org, project, repoId, account) {
   const res = await azureRequest({
     method: 'GET',
     org,
-    path: `${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/items?scopePath=/&recursionLevel=Full&includeContentMetadata=true&api-version=${API_VERSION}`,
+    path: `${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/items?scopePath=/&recursionLevel=full&includeContentMetadata=true&api-version=${API_VERSION}`,
     account,
   });
 
@@ -43,6 +52,10 @@ async function listYamlFiles(org, project, repoId, account) {
     .map((it) => it.path)
     .sort((a, b) => a.localeCompare(b));
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Lấy agent queue đầu tiên trong project (dùng để khai báo queue khi tạo pipeline)
+// ─────────────────────────────────────────────────────────────────
 
 async function listQueues(org, project, account) {
   const res = await azureRequest({
@@ -59,6 +72,10 @@ async function listQueues(org, project, account) {
 
   return (res.data && res.data.value) || [];
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Tạo build definition mới (YAML pipeline)
+// ─────────────────────────────────────────────────────────────────
 
 async function createDefinition(org, project, body, account) {
   const res = await azureRequest({
@@ -77,7 +94,14 @@ async function createDefinition(org, project, body, account) {
   return res.data;
 }
 
+// ─────────────────────────────────────────────────────────────────
+// MAIN — được gọi từ azure/index.js
+// Trả về { id, name } của pipeline vừa tạo, hoặc null nếu hủy/lỗi
+// ─────────────────────────────────────────────────────────────────
+
 async function run(org, project, account) {
+
+  // ── Bước 1: Chọn repo ──────────────────────────────────────────
   let repos = [];
   try {
     console.log(`${LOG} Đang lấy danh sách repo...`);
@@ -103,6 +127,7 @@ async function run(org, project, account) {
   const selectedRepo = repos[repoIdx];
   console.log(`${LOG} Repo: ${selectedRepo.name}`);
 
+  // ── Bước 2: Chọn file YAML ────────────────────────────────────
   let yamlFiles = [];
   try {
     console.log(`${LOG} Đang quét file *.yml/*.yaml trong repo...`);
@@ -113,41 +138,57 @@ async function run(org, project, account) {
   }
 
   if (yamlFiles.length === 0) {
-    console.log(`${LOG} Không tìm thấy file YAML trong repo.`);
-    return null;
+    console.log(`${LOG} Không tìm thấy file YAML trong repo. Bạn có thể nhập path thủ công.`);
   }
 
+  const menuItems = [
+    ...yamlFiles.map((f) => ({ label: f })),
+    { label: '✏  Nhập path YAML thủ công' },
+  ];
+
   const yamlIdx = await selectMenu(
-    `Chọn file YAML (${yamlFiles.length} file)`,
-    [
-      ...yamlFiles.map((f) => ({ label: f })),
-      { label: '✏  Nhập path YAML thủ công' },
-    ]
+    `Chọn file YAML${yamlFiles.length > 0 ? ` (${yamlFiles.length} file)` : ''}`,
+    menuItems
   );
   if (yamlIdx === -1) return null;
 
-  const selectedYaml = yamlIdx === yamlFiles.length
-    ? await ask('  Path YAML (VD: /azure-pipelines.yml)')
-    : yamlFiles[yamlIdx];
-  if (!selectedYaml) {
-    console.log('  Hủy.');
-    return null;
+  let selectedYaml;
+  if (yamlIdx === yamlFiles.length) {
+    // Nhập tay
+    selectedYaml = await ask('  Path YAML (VD: /azure-pipelines.yml)');
+    if (!selectedYaml) { console.log('  Hủy.'); return null; }
+    // Đảm bảo path bắt đầu bằng /
+    if (!selectedYaml.startsWith('/')) selectedYaml = `/${selectedYaml}`;
+  } else {
+    selectedYaml = yamlFiles[yamlIdx];
   }
 
+  // ── Bước 3: Đặt tên pipeline ──────────────────────────────────
   const defaultPipelineName = `${selectedRepo.name} - ${selectedYaml.replace(/^\//, '')}`;
   const pipelineName = await ask('  Tên pipeline mới', defaultPipelineName);
-  if (!pipelineName) {
-    console.log('  Hủy.');
-    return null;
-  }
+  if (!pipelineName) { console.log('  Hủy.'); return null; }
 
+  // ── Bước 4: Lấy queue (không bắt buộc) ───────────────────────
   let queueId = null;
   try {
     const queues = await listQueues(org, project, account);
     if (queues.length > 0) queueId = queues[0].id;
   } catch (e) {
-    console.error(`${LOG} Cảnh báo: không lấy được queue, sẽ thử tạo không kèm queue.`);
+    console.error(`${LOG} Cảnh báo: không lấy được queue — sẽ tạo pipeline không kèm queue.`);
   }
+
+  // ── Bước 5: Build payload và xác nhận ────────────────────────
+  //
+  // Azure DevOps Git repos luôn dùng type "TfsGit" trong build definition.
+  // API /git/repositories trả về loại repo là "Git" (enum internal), nhưng
+  // build definition API nhận "TfsGit" cho Azure Repos Git.
+  // Không dùng selectedRepo.type vì giá trị đó không ánh xạ 1-1 sang build def type.
+  //
+  // defaultBranch từ repo API có thể là "" (repo rỗng) → fallback 'refs/heads/main'.
+
+  const resolvedBranch = (selectedRepo.defaultBranch && selectedRepo.defaultBranch.trim())
+    ? selectedRepo.defaultBranch.trim()
+    : 'refs/heads/main';
 
   const body = {
     name: pipelineName,
@@ -156,16 +197,16 @@ async function run(org, project, account) {
     queueStatus: 'enabled',
     path: '\\',
     process: {
-      type: 2,
+      type: 2,                      // 2 = YAML pipeline
       yamlFilename: selectedYaml,
     },
     repository: {
-      id: selectedRepo.id,
-      name: selectedRepo.name,
-      type: selectedRepo.type || 'TfsGit',
-      url: selectedRepo.url,
-      defaultBranch: selectedRepo.defaultBranch || 'refs/heads/main',
-      clean: 'false',
+      id:            selectedRepo.id,
+      name:          selectedRepo.name,
+      type:          'TfsGit',      // hardcode: đây là giá trị đúng cho Azure Repos Git
+      url:           selectedRepo.url,
+      defaultBranch: resolvedBranch,
+      clean:         'false',
     },
   };
 
@@ -174,18 +215,17 @@ async function run(org, project, account) {
   }
 
   console.log('\n  Tóm tắt pipeline sẽ tạo:');
-  console.log(`    • Name: ${pipelineName}`);
-  console.log(`    • Repo: ${selectedRepo.name}`);
-  console.log(`    • YAML: ${selectedYaml}`);
-  if (queueId) console.log(`    • Queue ID: ${queueId}`);
+  console.log(`    • Name   : ${pipelineName}`);
+  console.log(`    • Repo   : ${selectedRepo.name}`);
+  console.log(`    • YAML   : ${selectedYaml}`);
+  console.log(`    • Branch : ${resolvedBranch}`);
+  if (queueId) console.log(`    • Queue  : ${queueId}`);
   console.log('');
 
   const ok = await confirm('  Xác nhận tạo pipeline?', true);
-  if (!ok) {
-    console.log('  Hủy.');
-    return null;
-  }
+  if (!ok) { console.log('  Hủy.'); return null; }
 
+  // ── Bước 6: Gọi API tạo pipeline ─────────────────────────────
   try {
     const created = await createDefinition(org, project, body, account);
     console.log(`${LOG} ✓ Đã tạo pipeline: ${created.name} (id=${created.id})`);

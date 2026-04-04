@@ -15,16 +15,27 @@ nodecli/
     config.js                   ← Parse .git-o-config, shared bởi mọi service
     prompt.js                   ← Helper menu/input tương tác (readline)
     shell.js                    ← Helper chạy lệnh shell (child_process)
+    azureApi.js                 ← Helper gọi Azure DevOps REST API (https built-in)
   services/
     gh/
       index.js                  ← Subcommand `ocli gh`: chọn account → repo → nghiệp vụ
       secrets.js                ← Nghiệp vụ: quản lý repo secrets
+    azure/
+      index.js                  ← Subcommand `ocli azure`: chọn account → project → (loop) pipeline → nghiệp vụ
+      createPipeline.js         ← Nghiệp vụ: tạo YAML pipeline từ repo
+      variables.js              ← Nghiệp vụ: quản lý pipeline variables
+    clip/
+      index.js                  ← Subcommand `ocli clip`: clipboard → file
+    addfiles/
+      index.js                  ← Subcommand `ocli addfiles`: file/zip → cwd
     <provider>/                 ← Thêm provider mới ở đây (xem mục 3)
       index.js
       <nghiep-vu>.js
   templates/
     gh-secrets.json             ← Template JSON để set nhiều secrets
     gh-secrets.env.example      ← Template .env để set nhiều secrets
+    azure-pipeline-vars.json    ← Template JSON để set nhiều pipeline variables
+    azure-pipeline-vars.env.example ← Template .env pipeline variables
   package.json
   README.md
   DeveloperGuide.vi.md          ← File này
@@ -280,21 +291,32 @@ Ví dụ:
 ZIP phải chứa **đúng** thư mục `nodecli/` ở gốc, để sau khi giải nén chép đè vào repo là dùng được ngay:
 
 ```
-ocli.1.0.0.feat-gh-secrets.zip
+ocli.1.3.0.fix-createpipeline.zip
 └── nodecli/
     ├── bin/
     │   └── ocli.js
     ├── lib/
     │   ├── config.js
     │   ├── prompt.js
-    │   └── shell.js
+    │   ├── shell.js
+    │   └── azureApi.js
     ├── services/
-    │   └── gh/
-    │       ├── index.js
-    │       └── secrets.js
+    │   ├── gh/
+    │   │   ├── index.js
+    │   │   └── secrets.js
+    │   ├── azure/
+    │   │   ├── index.js
+    │   │   ├── createPipeline.js
+    │   │   └── variables.js
+    │   ├── clip/
+    │   │   └── index.js
+    │   └── addfiles/
+    │       └── index.js
     ├── templates/
     │   ├── gh-secrets.json
-    │   └── gh-secrets.env.example
+    │   ├── gh-secrets.env.example
+    │   ├── azure-pipeline-vars.json
+    │   └── azure-pipeline-vars.env.example
     ├── package.json
     ├── README.md
     ├── DeveloperGuide.vi.md
@@ -306,14 +328,14 @@ ocli.1.0.0.feat-gh-secrets.zip
 
 ```bash
 # Từ thư mục gốc (nơi chứa nodecli/, alias.sh, v.v.)
-zip -r ocli.1.0.0.feat-gh-secrets.zip nodecli/ \
+zip -r ocli.1.3.0.fix-createpipeline.zip nodecli/ \
   --exclude "nodecli/node_modules/*" \
   --exclude "nodecli/.git/*"
 ```
 
 **Kiểm tra nội dung trước khi giao:**
 ```bash
-unzip -l ocli.1.0.0.feat-gh-secrets.zip
+unzip -l ocli.1.3.0.fix-createpipeline.zip
 ```
 
 Đảm bảo:
@@ -329,7 +351,6 @@ unzip -l ocli.1.0.0.feat-gh-secrets.zip
 - [ ] DeveloperGuide.vi.md đã cập nhật (nếu thêm service / lib mới)
 - [ ] ProjectStructure.md đã cập nhật (nếu thêm thư mục / file mới)
 - [ ] USER_CHANGELOG.md đã có entry mới ở đầu
-- [ ] .opushforce.message đã tạo với commit message đúng format
 - [ ] Không có node_modules/ trong ZIP
 - [ ] Tên ZIP đúng format: ocli.<version>.<noi-dung>.zip
 - [ ] Cấu trúc trong ZIP bắt đầu bằng nodecli/
@@ -345,3 +366,4 @@ unzip -l ocli.1.0.0.feat-gh-secrets.zip
 - **Mỗi lần thêm service mới** phải cập nhật đồng thời: `bin/ocli.js`, `README.md`, `ProjectStructure.md`, `DeveloperGuide.vi.md`
 - **Mỗi lần thêm nghiệp vụ** trong service đã có phải cập nhật: `services/<provider>/index.js` (thêm require + menu item), `README.md`
 - **Luôn dùng** `const LOG = '[<module>]'` để log có label rõ ràng
+- **`bin/` chỉ chứa `ocli.js`** — không đặt lib hay helper vào `bin/`
