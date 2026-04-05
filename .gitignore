@@ -57,3 +57,4 @@ lcov.info
 # Misc
 *.tgz
 *.zip
+nodecli/.cloudflared-o-config
