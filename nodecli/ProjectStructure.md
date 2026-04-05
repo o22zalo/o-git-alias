@@ -17,7 +17,9 @@ nodecli/
 │   ├── config.js               Parse .git-o-config → danh sách sections với token/user/header
 │   ├── prompt.js               Helper tương tác: ask, confirm, selectMenu, askFilePath
 │   ├── shell.js                Helper shell: run, spawn, commandExists
-│   └── azureApi.js             Helper gọi Azure DevOps REST API (https built-in, Basic auth)
+│   ├── azureApi.js             Helper gọi Azure DevOps REST API (https built-in, Basic auth)
+│   └── cloudflaredApi.js       Helper gọi Cloudflare REST API (https built-in, X-Auth-Key)
+│                               Bao gồm: loadDotenv, loadCloudflaredEnv, listCloudflareAccounts
 │
 ├── services/                   Mỗi provider là một thư mục con, độc lập nhau
 │   ├── gh/                     Subcommand ocli gh — GitHub (qua gh CLI + .git-o-config)
@@ -29,8 +31,13 @@ nodecli/
 │   │   └── variables.js        Nghiệp vụ: list / set / set-from-file / delete pipeline variables
 │   ├── clip/                   Subcommand ocli clip — clipboard → file theo header path
 │   │   └── index.js            Flow: đọc clipboard → parse path → ghi file → hỏi tiếp tục
-│   └── addfiles/               Subcommand ocli addfiles — file/zip → cwd theo header path
-│       └── index.js            Flow: nhận file/zip → staging → parse // Path: → ghi/move → báo cáo
+│   ├── addfiles/               Subcommand ocli addfiles — file/zip → cwd theo header path
+│   │   └── index.js            Flow: nhận file/zip → staging → parse // Path: → ghi/move → báo cáo
+│   └── cloudflared/            Subcommand ocli cloudflared — Cloudflare Tunnels + DNS
+│       ├── index.js            Flow: load .env → chọn account → resolve accountid (config/env/API)
+│       │                             → hiển thị CLOUDFLARED_* env → chọn nghiệp vụ
+│       └── tunnels.js          Nghiệp vụ: list / tạo / xuất credentials+config / DNS records / token / xóa
+│                               Đọc CLOUDFLARED_TUNNEL_* từ env để tự điền thông tin
 │
 ├── templates/                  File mẫu để user điền và truyền vào khi thao tác hàng loạt
 │   ├── gh-secrets.json         Mẫu JSON: key=value string
@@ -38,6 +45,7 @@ nodecli/
 │   ├── azure-pipeline-vars.json         Mẫu JSON: string hoặc object có isSecret/allowOverride
 │   └── azure-pipeline-vars.env.example  Mẫu .env: KEY=value (isSecret=false)
 │
+├── .cloudflared-o-config.example  Mẫu config Cloudflare (email, apikey, accountid tùy chọn)
 ├── package.json                name=ocli, bin.ocli=./bin/ocli.js, không có dep ngoài
 ├── README.md                   Hướng dẫn cài đặt, cú pháp, các subcommand
 ├── DeveloperGuide.vi.md        Quy tắc code, cách mở rộng, quy trình ZIP
@@ -52,9 +60,6 @@ nodecli/
 ```
 .git-o-config
       │
-      ▼
-lib/config.js → sections[]
-      │
       ├── services/gh/index.js      filterByProvider('github.com')
       │     │  → gh CLI (GH_TOKEN env)
       │     └── services/gh/secrets.js
@@ -63,6 +68,18 @@ lib/config.js → sections[]
             │  → lib/azureApi.js → https → dev.azure.com REST API
             ├── services/azure/createPipeline.js
             └── services/azure/variables.js
+
+nodecli/.cloudflared-o-config
+      │
+      └── services/cloudflared/index.js
+            │  → lib/cloudflaredApi.js → https → api.cloudflare.com
+            │  → loadCloudflaredEnv() → process.env CLOUDFLARED_* (từ .env)
+            │  → listCloudflareAccounts() nếu accountid chưa có
+            └── services/cloudflared/tunnels.js
+                  ├── Đọc CLOUDFLARED_TUNNEL_NAME/ID/SECRET/HOSTNAME_N/SERVICE_N từ env
+                  ├── Tạo/list/xóa tunnel
+                  ├── Xuất credentials.json + config.yml
+                  └── Upsert CNAME records qua Cloudflare DNS API
 
 Clipboard (OS):
       │
@@ -75,22 +92,38 @@ File / ZIP input:
 
 ---
 
+## Biến môi trường CLOUDFLARED\_\* (cloudflared service)
+
+| Biến                            | Mô tả                             | Dùng ở                                           |
+| ------------------------------- | --------------------------------- | ------------------------------------------------ |
+| `CLOUDFLARED_ACCOUNT_ID`        | Cloudflare Account ID             | index.js: resolveAccountId                       |
+| `CLOUDFLARED_TUNNEL_NAME`       | Tên tunnel                        | tunnels.js: createTunnel, workflowExistingTunnel |
+| `CLOUDFLARED_TUNNEL_ID`         | Tunnel UUID                       | tunnels.js: workflowExistingTunnel               |
+| `CLOUDFLARED_TUNNEL_SECRET`     | Tunnel secret (base64)            | tunnels.js: createTunnel, workflowExistingTunnel |
+| `CLOUDFLARED_TUNNEL_HOSTNAME_N` | Hostname ingress rule N (N=1..20) | tunnels.js: readIngressFromEnv                   |
+| `CLOUDFLARED_TUNNEL_SERVICE_N`  | Service URL ingress rule N        | tunnels.js: readIngressFromEnv                   |
+
+---
+
 ## Mối quan hệ phụ thuộc
 
-| Module | Phụ thuộc vào | KHÔNG phụ thuộc vào |
-|--------|--------------|---------------------|
-| bin/ocli.js | services/*/index.js | lib/* trực tiếp |
-| services/gh/index.js | lib/config, lib/prompt, lib/shell, services/gh/secrets | Các service khác |
-| services/gh/secrets.js | lib/shell, lib/prompt | lib/config, lib/azureApi |
-| services/azure/index.js | lib/config, lib/prompt, lib/azureApi, services/azure/variables, services/azure/createPipeline | Các service khác |
-| services/azure/createPipeline.js | lib/azureApi, lib/prompt | lib/config, lib/shell |
-| services/azure/variables.js | lib/azureApi, lib/prompt | lib/config, lib/shell |
-| services/clip/index.js | lib/shell, lib/prompt | lib/config, lib/azureApi |
-| services/addfiles/index.js | lib/shell, lib/prompt | lib/config, lib/azureApi |
-| lib/config.js | fs, path, os (built-in) | Không có |
-| lib/prompt.js | readline (built-in) | Không có |
-| lib/shell.js | child_process (built-in) | Không có |
-| lib/azureApi.js | https (built-in) | Không có |
+| Module                           | Phụ thuộc vào                                                               | KHÔNG phụ thuộc vào                          |
+| -------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------- |
+| bin/ocli.js                      | services/\*/index.js                                                        | lib/\* trực tiếp                             |
+| services/gh/index.js             | lib/config, lib/prompt, lib/shell, services/gh/secrets                      | Các service khác                             |
+| services/gh/secrets.js           | lib/shell, lib/prompt                                                       | lib/config, lib/azureApi, lib/cloudflaredApi |
+| services/azure/index.js          | lib/config, lib/prompt, lib/azureApi, azure/variables, azure/createPipeline | Các service khác                             |
+| services/azure/createPipeline.js | lib/azureApi, lib/prompt                                                    | lib/config, lib/shell                        |
+| services/azure/variables.js      | lib/azureApi, lib/prompt                                                    | lib/config, lib/shell                        |
+| services/clip/index.js           | lib/shell, lib/prompt                                                       | lib/config, lib/azureApi, lib/cloudflaredApi |
+| services/addfiles/index.js       | lib/shell, lib/prompt                                                       | lib/config, lib/azureApi, lib/cloudflaredApi |
+| services/cloudflared/index.js    | lib/cloudflaredApi, lib/prompt, cloudflared/tunnels                         | Các service khác                             |
+| services/cloudflared/tunnels.js  | lib/cloudflaredApi, lib/prompt                                              | lib/config, lib/azureApi, lib/shell          |
+| lib/config.js                    | fs, path, os (built-in)                                                     | Không có                                     |
+| lib/prompt.js                    | readline (built-in)                                                         | Không có                                     |
+| lib/shell.js                     | child_process (built-in)                                                    | Không có                                     |
+| lib/azureApi.js                  | https (built-in)                                                            | Không có                                     |
+| lib/cloudflaredApi.js            | https, fs, path, os (built-in)                                              | Không có                                     |
 
 ---
 
@@ -104,11 +137,13 @@ nodecli/README.md
 nodecli/DeveloperGuide.vi.md
 nodecli/ProjectStructure.md
 nodecli/USER_CHANGELOG.md
+nodecli/.cloudflared-o-config.example
 nodecli/bin/ocli.js
 nodecli/lib/config.js
 nodecli/lib/prompt.js
 nodecli/lib/shell.js
 nodecli/lib/azureApi.js
+nodecli/lib/cloudflaredApi.js
 nodecli/services/gh/index.js
 nodecli/services/gh/secrets.js
 nodecli/services/azure/index.js
@@ -116,6 +151,8 @@ nodecli/services/azure/createPipeline.js
 nodecli/services/azure/variables.js
 nodecli/services/clip/index.js
 nodecli/services/addfiles/index.js
+nodecli/services/cloudflared/index.js
+nodecli/services/cloudflared/tunnels.js
 nodecli/templates/gh-secrets.json
 nodecli/templates/gh-secrets.env.example
 nodecli/templates/azure-pipeline-vars.json

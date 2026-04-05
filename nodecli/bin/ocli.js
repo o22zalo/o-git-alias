@@ -3,37 +3,41 @@
 // Cú pháp: ocli <subcommand> [args...]
 // Subcommands: gh, azure, clip, addfiles, cloudflared
 
-'use strict';
+"use strict";
 
 const SUBCOMMANDS = {
-  gh:           () => require('../services/gh/index').run(),
-  azure:        () => require('../services/azure/index').run(),
-  clip:         () => require('../services/clip/index').run(),
-  addfiles:     (args) => require('../services/addfiles/index').run(args),
-  cloudflared:  () => require('../services/cloudflared/index').run(),
+  gh: () => require("../services/gh/index").run(),
+  azure: () => require("../services/azure/index").run(),
+  clip: () => require("../services/clip/index").run(),
+  addfiles: (args) => require("../services/addfiles/index").run(args),
+  cloudflared: () => require("../services/cloudflared/index").run(),
 };
 
 function printHelp() {
-  console.log('');
-  console.log('  ocli <subcommand>');
-  console.log('');
-  console.log('  Subcommands:');
-  console.log('    gh           GitHub — quản lý secrets (qua gh CLI + .git-o-config)');
-  console.log('    azure        Azure DevOps — quản lý pipeline variables (REST API)');
-  console.log('    clip         Đọc clipboard và ghi code vào file theo path metadata');
-  console.log('    addfiles     Đọc file/zip và ghi tuần tự vào cwd theo metadata // Path');
-  console.log('    cloudflared  Cloudflare Tunnels — tạo tunnel, xuất credentials + config Docker');
-  console.log('');
-  console.log('  Auth:');
-  console.log('    GitHub / Azure  : .git-o-config (thư mục gốc o-alias repo)');
-  console.log('    Cloudflare      : nodecli/.cloudflared-o-config');
-  console.log('');
+  console.log("");
+  console.log("  ocli <subcommand>");
+  console.log("");
+  console.log("  Subcommands:");
+  console.log("    gh           GitHub — quản lý secrets (qua gh CLI + .git-o-config)");
+  console.log("    azure        Azure DevOps — quản lý pipeline variables (REST API)");
+  console.log("    clip         Đọc clipboard và ghi code vào file theo path metadata");
+  console.log("    addfiles     Đọc file/zip và ghi tuần tự vào cwd theo metadata // Path");
+  console.log("    cloudflared  Cloudflare Tunnels — tạo tunnel, DNS records, credentials Docker");
+  console.log("");
+  console.log("  Auth:");
+  console.log("    GitHub / Azure  : .git-o-config (thư mục gốc o-alias repo)");
+  console.log("    Cloudflare      : nodecli/.cloudflared-o-config");
+  console.log("");
+  console.log("  Cloudflare env vars (CLOUDFLARED_*):");
+  console.log("    Đặt trong .env cùng thư mục để tự động điền thông tin khi tạo tunnel.");
+  console.log("    VD: CLOUDFLARED_TUNNEL_NAME, CLOUDFLARED_TUNNEL_HOSTNAME_1, ...");
+  console.log("");
 }
 
 async function main() {
-  const [,, sub, ...rest] = process.argv;
+  const [, , sub, ...rest] = process.argv;
 
-  if (!sub || sub === '--help' || sub === '-h' || sub === 'help') {
+  if (!sub || sub === "--help" || sub === "-h" || sub === "help") {
     printHelp();
     return;
   }

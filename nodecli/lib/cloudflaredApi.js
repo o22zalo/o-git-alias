@@ -2,14 +2,81 @@
 // Auth: X-Auth-Email + X-Auth-Key từ .cloudflared-o-config
 // Không dùng axios hay node-fetch — chỉ dùng https của Node.
 
-'use strict';
+"use strict";
 
-const https = require('https');
-const fs    = require('fs');
-const path  = require('path');
-const os    = require('os');
+const https = require("https");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
-const LOG = '[cloudflaredApi]';
+const LOG = "[cloudflaredApi]";
+
+// ─────────────────────────────────────────────────────────────────
+// Load .env file vào process.env (dotenv-style, không cần package ngoài)
+// Hỗ trợ: KEY=value, KEY="value", KEY='value', comment #, expand ${VAR}
+// ─────────────────────────────────────────────────────────────────
+
+function loadDotenv(envFilePath) {
+  if (!fs.existsSync(envFilePath)) return {};
+
+  const raw = fs.readFileSync(envFilePath, "utf8");
+  const loaded = {};
+
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+
+    const key = line.slice(0, eq).trim();
+    let val = line.slice(eq + 1).trim();
+
+    // Bỏ dấu nháy bao quanh
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+
+    // Expand ${VAR} hoặc $VAR đơn giản
+    val = val.replace(/\$\{([^}]+)\}/g, (_, k) => process.env[k] || loaded[k] || "");
+    val = val.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, k) => process.env[k] || loaded[k] || "");
+
+    loaded[key] = val;
+    if (!(key in process.env)) process.env[key] = val;
+  }
+
+  return loaded;
+}
+
+/**
+ * Load .env file và trả về các biến CLOUDFLARED_* đang có trong process.env.
+ * Tìm .env theo thứ tự: cwd → thư mục nodecli → thư mục gốc repo.
+ */
+function loadCloudflaredEnv(envFilePath) {
+  const candidates = [];
+
+  if (envFilePath) {
+    candidates.push(envFilePath);
+  } else {
+    candidates.push(path.join(process.cwd(), ".env"), path.resolve(__dirname, "..", ".env"), path.resolve(__dirname, "..", "..", ".env"));
+  }
+
+  let loaded = {};
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      loaded = loadDotenv(p);
+      break;
+    }
+  }
+
+  // Trả về tất cả key CLOUDFLARED_* từ process.env (bao gồm cả load mới + có sẵn)
+  const result = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k.startsWith("CLOUDFLARED_")) result[k] = v;
+  }
+
+  return { vars: result, loaded };
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Parse .cloudflared-o-config (INI-style)
@@ -17,24 +84,22 @@ const LOG = '[cloudflaredApi]';
 //   [label]
 //   email=...
 //   apikey=...
-//   accountid=...
+//   accountid=...    ← tùy chọn, có thể bỏ trống để chọn qua API
 // ─────────────────────────────────────────────────────────────────
 
 function resolveCloudflaredConfigPath() {
-  // Tìm trong thư mục nodecli/ trước
-  const nodeCliDir = path.resolve(__dirname, '..');
-  const candidate  = path.join(nodeCliDir, '.cloudflared-o-config');
+  const nodeCliDir = path.resolve(__dirname, "..");
+  const candidate = path.join(nodeCliDir, ".cloudflared-o-config");
   if (fs.existsSync(candidate)) return candidate;
 
-  // Fallback: thư mục home
-  const homeCand = path.join(os.homedir(), '.cloudflared-o-config');
+  const homeCand = path.join(os.homedir(), ".cloudflared-o-config");
   if (fs.existsSync(homeCand)) return homeCand;
 
   return null;
 }
 
 function parseCloudflaredConfig(filePath) {
-  const raw   = fs.readFileSync(filePath, 'utf8');
+  const raw = fs.readFileSync(filePath, "utf8");
   const lines = raw.split(/\r?\n/);
 
   const sections = [];
@@ -42,24 +107,24 @@ function parseCloudflaredConfig(filePath) {
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
+    if (!line || line.startsWith("#")) continue;
 
     const secMatch = line.match(/^\[(.+)\]$/);
     if (secMatch) {
-      cur = { label: secMatch[1], email: '', apikey: '', accountid: '' };
+      cur = { label: secMatch[1], email: "", apikey: "", accountid: "" };
       sections.push(cur);
       continue;
     }
 
     if (!cur) continue;
 
-    const kv = line.match(/^(\w+)\s*=\s*(.+)$/);
+    const kv = line.match(/^(\w+)\s*=\s*(.*)$/);
     if (!kv) continue;
 
     const [, key, val] = kv;
-    if (key === 'email')     cur.email     = val.trim();
-    if (key === 'apikey')    cur.apikey    = val.trim();
-    if (key === 'accountid') cur.accountid = val.trim();
+    if (key === "email") cur.email = val.trim();
+    if (key === "apikey") cur.apikey = val.trim();
+    if (key === "accountid") cur.accountid = val.trim();
   }
 
   return sections;
@@ -74,8 +139,8 @@ function loadCloudflaredSections() {
   if (!cfgPath) {
     throw new Error(
       `${LOG} Không tìm thấy .cloudflared-o-config.\n` +
-      '  Tạo từ mẫu: cp nodecli/.cloudflared-o-config.example nodecli/.cloudflared-o-config\n' +
-      '  Điền email, apikey, accountid của bạn.'
+        "  Tạo từ mẫu: cp nodecli/.cloudflared-o-config.example nodecli/.cloudflared-o-config\n" +
+        "  Điền email, apikey, accountid của bạn.",
     );
   }
   return { sections: parseCloudflaredConfig(cfgPath), filePath: cfgPath };
@@ -90,10 +155,10 @@ function buildHeaders(account, extraHeaders = {}) {
     throw new Error(`${LOG} Thiếu email hoặc apikey cho account: ${account.label}`);
   }
   return {
-    'X-Auth-Email':   account.email,
-    'X-Auth-Key':     account.apikey,
-    'Content-Type':   'application/json',
-    'Accept':         'application/json',
+    "X-Auth-Email": account.email,
+    "X-Auth-Key": account.apikey,
+    "Content-Type": "application/json",
+    Accept: "application/json",
     ...extraHeaders,
   };
 }
@@ -107,14 +172,14 @@ function buildHeaders(account, extraHeaders = {}) {
  *
  * @param {object} opts
  *   method    : 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
- *   path      : path sau https://api.cloudflare.com/client/v4 (VD: '/accounts/:id/tunnels')
+ *   path      : path sau https://api.cloudflare.com/client/v4
  *   body      : object (JSON) hoặc undefined
  *   account   : { label, email, apikey, accountid }
  *
  * @returns Promise<{ ok, status, result, errors, messages, raw }>
  */
 function cloudflaredRequest(opts) {
-  const { method = 'GET', path: apiPath, body, account } = opts;
+  const { method = "GET", path: apiPath, body, account } = opts;
 
   let headers;
   try {
@@ -123,44 +188,77 @@ function cloudflaredRequest(opts) {
     return Promise.reject(e);
   }
 
-  const bodyStr = body ? JSON.stringify(body) : '';
+  const bodyStr = body ? JSON.stringify(body) : "";
   if (bodyStr) {
-    headers['Content-Length'] = Buffer.byteLength(bodyStr);
+    headers["Content-Length"] = Buffer.byteLength(bodyStr);
   }
 
-  const hostname = 'api.cloudflare.com';
+  const hostname = "api.cloudflare.com";
   const fullPath = `/client/v4${apiPath}`;
 
   return new Promise((resolve, reject) => {
-    const req = https.request(
-      { hostname, path: fullPath, method, headers },
-      (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          const raw = Buffer.concat(chunks).toString('utf8');
-          let parsed = null;
-          try { parsed = JSON.parse(raw); } catch {
-            parsed = { success: false, _rawText: raw };
-          }
+    const req = https.request({ hostname, path: fullPath, method, headers }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks).toString("utf8");
+        let parsed = null;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = { success: false, _rawText: raw };
+        }
 
-          const ok = res.statusCode >= 200 && res.statusCode < 300 && parsed.success !== false;
-          resolve({
-            ok,
-            status:   res.statusCode,
-            result:   parsed.result   ?? null,
-            errors:   parsed.errors   ?? [],
-            messages: parsed.messages ?? [],
-            raw,
-          });
+        const ok = res.statusCode >= 200 && res.statusCode < 300 && parsed.success !== false;
+        resolve({
+          ok,
+          status: res.statusCode,
+          result: parsed.result ?? null,
+          errors: parsed.errors ?? [],
+          messages: parsed.messages ?? [],
+          raw,
         });
-      }
-    );
+      });
+    });
 
-    req.on('error', reject);
+    req.on("error", reject);
     if (bodyStr) req.write(bodyStr);
     req.end();
   });
 }
 
-module.exports = { cloudflaredRequest, loadCloudflaredSections, resolveCloudflaredConfigPath };
+// ─────────────────────────────────────────────────────────────────
+// API: Lấy danh sách accounts mà API key có quyền truy cập
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Lấy danh sách accounts từ Cloudflare API.
+ * @returns Promise<Array<{ id, name, type }>>
+ */
+async function listCloudflareAccounts(account) {
+  const res = await cloudflaredRequest({
+    method: "GET",
+    path: "/accounts?per_page=50",
+    account,
+  });
+
+  if (!res.ok) {
+    const errMsg = (res.errors || []).map((e) => e.message).join("; ") || `status ${res.status}`;
+    throw new Error(`${LOG} Không lấy được danh sách accounts: ${errMsg}`);
+  }
+
+  return (res.result || []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    type: a.type || "standard",
+  }));
+}
+
+module.exports = {
+  cloudflaredRequest,
+  loadCloudflaredSections,
+  resolveCloudflaredConfigPath,
+  loadCloudflaredEnv,
+  listCloudflareAccounts,
+  loadDotenv,
+};

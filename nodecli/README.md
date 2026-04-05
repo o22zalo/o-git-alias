@@ -1,7 +1,7 @@
 # nodecli — O-Alias Node CLI
 
-CLI bổ sung cho [Git O-Alias](../Readme.md), thực hiện các thao tác API tới GitHub, Azure DevOps, v.v.  
-Sử dụng lại cấu hình auth từ `.git-o-config`. Không có dependency ngoài — chỉ dùng Node built-ins.
+CLI bổ sung cho [Git O-Alias](../Readme.md), thực hiện các thao tác API tới GitHub, Azure DevOps, Cloudflare, v.v.  
+Sử dụng lại cấu hình auth từ `.git-o-config` và `.cloudflared-o-config`. Không có dependency ngoài — chỉ dùng Node built-ins.
 
 ---
 
@@ -15,7 +15,8 @@ nodecli/
     config.js                       ← Parse .git-o-config
     prompt.js                       ← Helper menu/input tương tác
     shell.js                        ← Helper chạy lệnh shell
-    azureApi.js                     ← Helper gọi Azure DevOps REST API (https built-in)
+    azureApi.js                     ← Helper gọi Azure DevOps REST API
+    cloudflaredApi.js               ← Helper gọi Cloudflare REST API + load .env
   services/
     gh/
       index.js                      ← Subcommand ocli gh
@@ -27,171 +28,22 @@ nodecli/
     clip/
       index.js                      ← Subcommand ocli clip (clipboard → file)
     addfiles/
-      index.js                      ← Subcommand ocli addfiles (file/zip → cwd theo header path)
+      index.js                      ← Subcommand ocli addfiles (file/zip → cwd)
+    cloudflared/
+      index.js                      ← Subcommand ocli cloudflared
+      tunnels.js                    ← Quản lý tunnels, DNS records, xuất credentials
   templates/
-    gh-secrets.json                 ← Template JSON GitHub secrets
-    gh-secrets.env.example          ← Template .env GitHub secrets
-    azure-pipeline-vars.json        ← Template JSON Azure pipeline variables
-    azure-pipeline-vars.env.example ← Template .env Azure pipeline variables
+    gh-secrets.json
+    gh-secrets.env.example
+    azure-pipeline-vars.json
+    azure-pipeline-vars.env.example
+  .cloudflared-o-config.example     ← Mẫu config Cloudflare
   package.json
   README.md
   DeveloperGuide.vi.md
   ProjectStructure.md
   USER_CHANGELOG.md
 ```
-
----
-
-
-## Diagram tổng thể (chi tiết)
-
-### 1) Kiến trúc thư mục + luồng gọi module
-
-```mermaid
-flowchart TB
-    U[Người dùng\nchạy lệnh ocli] --> O[bin/ocli.js\nEntry point + SUBCOMMANDS]
-
-    O -->|subcommand gh| GH[services/gh/index.js]
-    O -->|subcommand azure| AZ[services/azure/index.js]
-    O -->|subcommand clip| CLIP[services/clip/index.js]
-    O -->|subcommand addfiles| ADD[services/addfiles/index.js]
-
-    O --> CFG[lib/config.js\nĐọc + parse .git-o-config]
-    O --> PR[lib/prompt.js\nMenu/input tương tác]
-    O --> SH[lib/shell.js\nChạy shell command]
-    O --> API[lib/azureApi.js\nHTTPS wrapper Azure DevOps]
-
-    GH --> GHSEC[services/gh/secrets.js\nList/Set/Delete secrets]
-    GH --> SH
-    GH --> PR
-    GH --> CFG
-
-    AZ --> AZVAR[services/azure/variables.js\nList/Set/Delete variables]
-    AZ --> AZCP[services/azure/createPipeline.js\nTạo pipeline từ YAML]
-    AZ --> PR
-    AZ --> CFG
-    AZ --> API
-
-    GHSEC --> TGH1[templates/gh-secrets.json]
-    GHSEC --> TGH2[templates/gh-secrets.env.example]
-    AZVAR --> TAZ1[templates/azure-pipeline-vars.json]
-    AZVAR --> TAZ2[templates/azure-pipeline-vars.env.example]
-
-    CFG --> GC[(~/.git-o-config\nhoặc ./.git-o-config)]
-```
-
-### 2) Sequence cho `ocli gh` (GitHub Secrets)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant User as User
-    participant OCLI as bin/ocli.js
-    participant Cfg as lib/config.js
-    participant Prompt as lib/prompt.js
-    participant GH as services/gh/index.js
-    participant Sec as services/gh/secrets.js
-    participant Shell as lib/shell.js
-    participant GHCli as gh CLI
-    participant GHApi as GitHub API
-
-    User->>OCLI: ocli gh
-    OCLI->>Cfg: loadConfig()
-    Cfg-->>OCLI: Danh sách account github.com/*
-    OCLI->>GH: run(ctx)
-
-    GH->>Prompt: Chọn account/repo/action
-    Prompt-->>GH: User selection
-
-    alt List secrets
-        GH->>Sec: listSecrets(repo, token)
-        Sec->>Shell: exec(gh secret list ... )
-        Shell->>GHCli: run command
-        GHCli->>GHApi: GET repo secrets
-        GHApi-->>GHCli: result
-        GHCli-->>Shell: output
-        Shell-->>Sec: output
-        Sec-->>GH: parsed result
-    else Set single/multi
-        GH->>Sec: setSecret(s)
-        Sec->>Shell: exec(gh secret set ... )
-    else Delete secret
-        GH->>Sec: deleteSecret()
-        Sec->>Shell: exec(gh secret delete ... )
-    end
-
-    GH-->>User: Render kết quả
-```
-
-### 3) Sequence cho `ocli azure` (Pipeline Variables + Create Pipeline)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant User as User
-    participant OCLI as bin/ocli.js
-    participant Cfg as lib/config.js
-    participant Prompt as lib/prompt.js
-    participant AZ as services/azure/index.js
-    participant CP as services/azure/createPipeline.js
-    participant Var as services/azure/variables.js
-    participant Api as lib/azureApi.js
-    participant ADO as Azure DevOps REST API
-
-    User->>OCLI: ocli azure
-    OCLI->>Cfg: loadConfig()
-    Cfg-->>OCLI: Account dev.azure.com/* + headers
-    OCLI->>AZ: run(ctx)
-
-    AZ->>Prompt: Chọn org/project
-    Prompt-->>AZ: User selection
-
-    loop Chọn pipeline action
-        AZ->>Prompt: Chọn flow (hiện có / tạo mới)
-
-        alt Chọn pipeline hiện có
-            AZ->>Api: GET build/definitions
-            Api->>ADO: list pipelines
-            ADO-->>Api: definitions[]
-            Api-->>AZ: pipelines
-            AZ->>Prompt: Chọn pipeline
-        else Tạo pipeline mới
-            AZ->>CP: run(org, project, account)
-            CP->>Api: GET git/repositories
-            CP->>Api: GET git/items (YAML files)
-            CP->>Prompt: Chọn repo + YAML + tên
-            CP->>Api: POST build/definitions
-            Api->>ADO: tạo pipeline
-            ADO-->>Api: created definition
-            CP-->>AZ: {id, name}
-        end
-
-        loop Chọn nghiệp vụ
-            AZ->>Var: run(org, project, pipeline, account)
-            alt List variables
-                Var->>Api: GET definition
-            else Set / Delete
-                Var->>Api: GET definition
-                Var->>Api: PUT definition (variables updated)
-            end
-        end
-    end
-
-    AZ-->>User: Render kết quả
-```
-
-### 4) Bảng trách nhiệm module
-
-| Module | Trách nhiệm chính | I/O chính |
-|---|---|---|
-| `bin/ocli.js` | Router subcommand, khởi tạo context dùng chung | Input: argv, Output: gọi service tương ứng |
-| `lib/config.js` | Parse `.git-o-config`, normalize account/provider | Input: file config, Output: account objects |
-| `lib/prompt.js` | Giao diện nhập/chọn tương tác CLI | Input: options/schema, Output: selection/value |
-| `lib/shell.js` | Chạy command shell (đặc biệt cho `gh`) | Input: command/env, Output: stdout/stderr/exitCode |
-| `lib/azureApi.js` | HTTP client tối giản cho Azure DevOps | Input: method/url/body/headers, Output: JSON response |
-| `services/gh/*` | Nghiệp vụ GitHub secrets | Input: token/repo/file, Output: danh sách/trạng thái secrets |
-| `services/azure/createPipeline.js` | Tạo YAML pipeline từ repo | Input: org/project/repo/yaml, Output: {id, name} pipeline mới |
-| `services/azure/variables.js` | Nghiệp vụ Azure pipeline variables | Input: org/project/pipeline/vars, Output: definition đã cập nhật |
 
 ---
 
@@ -204,7 +56,7 @@ npm link
 
 Sau đó dùng lệnh `ocli` từ bất kỳ thư mục nào.
 
-Lưu ý trên Git Bash (Windows) — set executable bit:
+Lưu ý trên Git Bash (Windows):
 ```bash
 chmod +x nodecli/bin/ocli.js
 ```
@@ -219,10 +71,110 @@ ocli <subcommand>
 
 | Subcommand | Mô tả |
 |-----------|-------|
-| `gh`      | GitHub — quản lý repo secrets (cần cài gh CLI) |
-| `azure`   | Azure DevOps — quản lý pipeline variables (REST API) |
-| `clip`    | Clipboard workflow — parse path trong header và ghi file theo cwd |
-| `addfiles` | Nhập file/zip, parse `// Path:` trong 3 dòng đầu, ghi/move tuần tự vào cwd + báo cáo |
+| `gh`          | GitHub — quản lý repo secrets (cần cài gh CLI) |
+| `azure`       | Azure DevOps — quản lý pipeline variables (REST API) |
+| `clip`        | Clipboard workflow — parse path trong header và ghi file theo cwd |
+| `addfiles`    | Nhập file/zip, parse `// Path:` trong 3 dòng đầu, ghi/move tuần tự vào cwd |
+| `cloudflared` | Cloudflare Tunnels — tạo tunnel, DNS records, xuất credentials Docker |
+
+---
+
+## Subcommand: cloudflared
+
+```bash
+ocli cloudflared
+```
+
+Không cần cài thêm CLI — gọi Cloudflare REST API trực tiếp qua https built-in.
+
+### Cấu hình auth
+
+Tạo file `nodecli/.cloudflared-o-config` từ mẫu:
+
+```bash
+cp nodecli/.cloudflared-o-config.example nodecli/.cloudflared-o-config
+```
+
+Format:
+```ini
+[mycompany]
+email=admin@mycompany.com
+apikey=YOUR_GLOBAL_API_KEY
+accountid=YOUR_ACCOUNT_ID    # tùy chọn — bỏ trống để chọn qua API
+```
+
+Lấy Global API Key tại: https://dash.cloudflare.com/profile/api-tokens → tab "Global API Key"
+
+### Resolve Account ID
+
+Nếu `accountid` chưa có trong config, ocli sẽ:
+1. Kiểm tra biến `CLOUDFLARED_ACCOUNT_ID` trong môi trường
+2. Nếu không có → gọi API lấy danh sách accounts để chọn
+3. Hỏi có muốn lưu vào config để lần sau không hỏi lại không
+
+### Biến môi trường CLOUDFLARED_*
+
+Đặt các biến sau trong file `.env` (cùng thư mục làm việc hoặc thư mục `nodecli/`).
+ocli tự load file `.env` mà không cần cài thêm package ngoài.
+
+```env
+# Account
+CLOUDFLARED_ACCOUNT_ID=your-account-id
+
+# Tunnel info
+CLOUDFLARED_TUNNEL_NAME=my-app-tunnel
+CLOUDFLARED_TUNNEL_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+CLOUDFLARED_TUNNEL_SECRET=base64-secret-here
+
+# Ingress rules (index tăng dần 1..20)
+CLOUDFLARED_TUNNEL_HOSTNAME_1=app.example.com
+CLOUDFLARED_TUNNEL_SERVICE_1=http://app-service:3000
+CLOUDFLARED_TUNNEL_HOSTNAME_2=api.example.com
+CLOUDFLARED_TUNNEL_SERVICE_2=http://api-service:8080
+```
+
+Khi khởi động, ocli hiển thị các biến `CLOUDFLARED_*` phát hiện được để bạn xác nhận dùng hay không.
+
+### Tính năng
+
+**Tunnels:**
+- Xem danh sách tunnels
+- Tạo tunnel mới (đọc tên + secret từ env nếu có)
+- Xuất `credentials.json` + `config.yml` để deploy Docker
+- Lấy tunnel run token (`cloudflared tunnel run --token`)
+- Xóa tunnel
+
+**DNS Records:**
+- Tạo / cập nhật CNAME records trỏ về `<tunnel-id>.cfargotunnel.com` cho từng hostname
+- Tự động detect zone từ hostname, tìm record hiện có
+- Nếu record đã tồn tại nhưng sai target → cập nhật lại
+- Hỗ trợ đọc danh sách hostname từ biến `CLOUDFLARED_TUNNEL_HOSTNAME_N` trong env
+- Gợi ý xử lý khi gặp lỗi (zone chưa thêm vào CF, thiếu quyền DNS, conflict)
+
+**Flow tạo tunnel hoàn chỉnh:**
+1. `ocli cloudflared`
+2. Chọn account → chọn/confirm accountid
+3. Tạo tunnel mới → tự điền tên từ `CLOUDFLARED_TUNNEL_NAME` nếu có
+4. Xuất `credentials.json` + `config.yml` với ingress từ `CLOUDFLARED_TUNNEL_HOSTNAME_N`
+5. Tạo DNS CNAME records ngay sau khi xuất file (tùy chọn)
+
+### Ví dụ deploy Docker
+
+Sau khi xuất file:
+
+```bash
+docker run -d \
+  -v /path/to/credentials.json:/etc/cloudflared/credentials.json \
+  -v /path/to/config.yml:/etc/cloudflared/config.yml \
+  cloudflare/cloudflared:latest \
+  tunnel --config /etc/cloudflared/config.yml run
+```
+
+Hoặc dùng token:
+```bash
+docker run -d cloudflare/cloudflared:latest \
+  tunnel --no-autoupdate run --token YOUR_TOKEN
+```
 
 ---
 
@@ -245,10 +197,6 @@ Secrets — các thao tác hỗ trợ:
 - Set nhiều secrets từ file JSON hoặc .env
 - Xóa secret
 
-Template: templates/gh-secrets.json hoặc templates/gh-secrets.env.example
-
-Auth: token từ .git-o-config truyền qua env GH_TOKEN.
-
 ---
 
 ## Subcommand: azure
@@ -257,25 +205,14 @@ Auth: token từ .git-o-config truyền qua env GH_TOKEN.
 ocli azure
 ```
 
-Không cần cài thêm CLI — gọi Azure DevOps REST API trực tiếp qua https built-in.
-
 Flow:
 1. Chọn account dev.azure.com/* từ .git-o-config
 2. Lấy danh sách project → chọn project
-   (Nếu section config dạng [dev.azure.com/org/project] → tự động dùng project đó)
-3. Vòng lặp chọn flow:
-   - Chọn pipeline hiện có để quản lý variables
-   - Tạo pipeline mới từ file YAML trong repo
-4. Nếu tạo mới: chọn repo → chọn file `.yml/.yaml` từ repo → nhập tên pipeline → tạo pipeline
-5. Chọn nghiệp vụ: Variables (quay lại bước 3 khi thoát)
+3. Vòng lặp chọn flow: pipeline hiện có / tạo mới
+4. Nếu tạo mới: chọn repo → chọn YAML → tạo pipeline
+5. Chọn nghiệp vụ: Variables
 
-Variables — các thao tác hỗ trợ:
-- Xem danh sách variables (hiển thị tên, isSecret, giá trị)
-- Set 1 variable (nhập tay, có hỏi isSecret và allowOverride)
-- Set nhiều variables từ file JSON hoặc .env
-- Xóa variable
-
-Template JSON: templates/azure-pipeline-vars.json
+Template JSON azure: `templates/azure-pipeline-vars.json`
 
 ```json
 {
@@ -288,50 +225,34 @@ Template JSON: templates/azure-pipeline-vars.json
 }
 ```
 
-- Giá trị dạng string → isSecret=false, allowOverride=true
-- Giá trị dạng object → tuỳ chỉnh đầy đủ
-- Key bắt đầu bằng _ bị bỏ qua (dùng làm comment)
-
-Template .env: templates/azure-pipeline-vars.env.example
-
-File .env luôn set isSecret=false. Muốn set secret → dùng file JSON.
-
 ---
 
-## Cấu hình auth trong .git-o-config
+## Cấu hình auth
 
-GitHub:
-```
+### GitHub (.git-o-config)
+```ini
 [github.com/myorg]
 token=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Azure DevOps (chỉ org):
-```
-[dev.azure.com/myorg]
-header=Authorization: Basic BASE64ENCODEDPAT==
-```
-
-Azure DevOps (kèm project — bỏ qua bước chọn project):
-```
+### Azure DevOps (.git-o-config)
+```ini
 [dev.azure.com/myorg/myproject]
 header=Authorization: Basic BASE64ENCODEDPAT==
 ```
 
-Encode PAT (PowerShell):
-```
-[Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":YOUR_PAT"))
-```
-
-Encode PAT (Git Bash):
-```
-echo -n ":YOUR_PAT" | base64
+### Cloudflare (nodecli/.cloudflared-o-config)
+```ini
+[mycompany]
+email=admin@mycompany.com
+apikey=YOUR_GLOBAL_API_KEY
+accountid=YOUR_ACCOUNT_ID
 ```
 
 ---
 
 ## Thêm subcommand mới
 
-1. Tạo services/<provider>/index.js với async function run()
-2. Thêm vào bin/ocli.js trong object SUBCOMMANDS
-3. Cập nhật README.md, ProjectStructure.md, DeveloperGuide.vi.md
+1. Tạo `services/<provider>/index.js` với `async function run()`
+2. Thêm vào `bin/ocli.js` trong object `SUBCOMMANDS`
+3. Cập nhật `README.md`, `ProjectStructure.md`, `DeveloperGuide.vi.md`
