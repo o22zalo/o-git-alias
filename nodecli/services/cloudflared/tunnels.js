@@ -67,6 +67,47 @@ function readIngressFromEnv(envVars) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// HELPER: Build label cho menu option "Lấy từ process.env"
+// ─────────────────────────────────────────────────────────────────
+
+function buildEnvIngressLabel(envRules) {
+  if (envRules.length === 0) {
+    return "Lấy từ process.env hiện tại  ⚠  (không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N)";
+  }
+  const preview = envRules
+    .slice(0, 3)
+    .map((r) => r.hostname)
+    .join(", ");
+  const more = envRules.length > 3 ? ` +${envRules.length - 3} nữa` : "";
+  return `Lấy từ process.env hiện tại  ✓  (${envRules.length} rule(s): ${preview}${more})`;
+}
+
+function buildEnvHostnamesLabel(envRules) {
+  if (envRules.length === 0) {
+    return "Lấy hostname từ process.env hiện tại  ⚠  (không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N)";
+  }
+  const preview = envRules
+    .slice(0, 3)
+    .map((r) => r.hostname)
+    .join(", ");
+  const more = envRules.length > 3 ? ` +${envRules.length - 3} nữa` : "";
+  return `Lấy hostname từ process.env hiện tại  ✓  (${envRules.length} hostname(s): ${preview}${more})`;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HELPER: In chi tiết ingress rules từ env
+// ─────────────────────────────────────────────────────────────────
+
+function printEnvIngressRules(envRules) {
+  console.log(`\n  Ingress rules từ process.env (${envRules.length} rule(s)):\n`);
+  envRules.forEach((r, i) => {
+    console.log(`    ${String(i + 1).padStart(2)}.  ${r.hostname}`);
+    console.log(`        → ${r.service}`);
+  });
+  console.log("");
+}
+
+// ─────────────────────────────────────────────────────────────────
 // LIST tunnels
 // ─────────────────────────────────────────────────────────────────
 
@@ -107,7 +148,6 @@ async function listTunnels(account) {
 async function createTunnel(account, envVars) {
   console.log(`\n${LOG} Tạo tunnel mới`);
 
-  // Đọc tên từ env nếu có
   const envName = envVars["CLOUDFLARED_TUNNEL_NAME"];
   let defaultName = envName || "";
 
@@ -121,7 +161,6 @@ async function createTunnel(account, envVars) {
     return null;
   }
 
-  // Đọc secret từ env hoặc sinh mới
   const envSecret = envVars["CLOUDFLARED_TUNNEL_SECRET"];
   let tunnelSecret;
 
@@ -200,7 +239,6 @@ function parseEnvForIngress(filePath) {
 
   const rules = [];
 
-  // Pattern chính: CLOUDFLARED_TUNNEL_HOSTNAME_N + CLOUDFLARED_TUNNEL_SERVICE_N
   for (let i = 1; i <= 20; i++) {
     const hostname = envMap[`CLOUDFLARED_TUNNEL_HOSTNAME_${i}`];
     const service = envMap[`CLOUDFLARED_TUNNEL_SERVICE_${i}`];
@@ -209,7 +247,6 @@ function parseEnvForIngress(filePath) {
     }
   }
 
-  // Fallback: key đơn không đánh số
   if (rules.length === 0) {
     const h = envMap["CLOUDFLARED_TUNNEL_HOSTNAME"];
     const s = envMap["CLOUDFLARED_TUNNEL_SERVICE"];
@@ -242,21 +279,165 @@ function buildConfigYml(tunnelId, ingressRules) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// MENU CHỌN NGUỒN INGRESS RULES (workflowOutputFiles)
+//
+//   [1] Lấy từ process.env — hiển thị số rules + preview hostname/service
+//   [2] Nhập từ file .env
+//   [3] Nhập thủ công
+//
+// Trả về: mảng { hostname, service } hoặc null nếu hủy
+// ─────────────────────────────────────────────────────────────────
+
+async function selectIngressSource(envVars) {
+  const envRules = readIngressFromEnv(envVars || {});
+
+  const sourceIdx = await selectMenu("Nguồn ingress rules", [
+    { label: buildEnvIngressLabel(envRules) },
+    { label: "Nhập từ file .env (CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N)" },
+    { label: "Nhập thủ công (từng hostname + service)" },
+  ]);
+
+  if (sourceIdx === -1) return null;
+
+  // ── [1] process.env ──────────────────────────────────────────────
+  if (sourceIdx === 0) {
+    if (envRules.length === 0) {
+      console.log(`\n${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N nào trong process.env.`);
+      console.log(`${LOG} Gợi ý: thêm vào .env:`);
+      console.log(`${LOG}   CLOUDFLARED_TUNNEL_HOSTNAME_1=app.yourdomain.com`);
+      console.log(`${LOG}   CLOUDFLARED_TUNNEL_SERVICE_1=http://your-service:8080`);
+      return null;
+    }
+
+    printEnvIngressRules(envRules);
+    const ok = await confirm("  Dùng các ingress rules này?", true);
+    if (!ok) return null;
+
+    return envRules;
+  }
+
+  // ── [2] file .env ────────────────────────────────────────────────
+  if (sourceIdx === 1) {
+    console.log("\n  Format .env hỗ trợ:");
+    console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_1=yourdomain.com");
+    console.log("    CLOUDFLARED_TUNNEL_SERVICE_1=http://my-service:8080");
+    console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_2=sub.domain.com");
+    console.log("    CLOUDFLARED_TUNNEL_SERVICE_2=http://other:3000\n");
+
+    const envPath = await askFilePath("  Đường dẫn file .env");
+    if (!envPath) {
+      console.log("  Hủy.");
+      return null;
+    }
+
+    let parsed;
+    try {
+      parsed = parseEnvForIngress(envPath);
+    } catch (e) {
+      console.error(`${LOG} Không đọc được file .env: ${e.message}`);
+      return null;
+    }
+
+    if (parsed.rules.length === 0) {
+      console.log(`${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N trong file.`);
+      return null;
+    }
+
+    console.log(`\n  Tìm thấy ${parsed.rules.length} ingress rule(s):`);
+    parsed.rules.forEach((r) => console.log(`    • ${r.hostname} → ${r.service}`));
+    console.log("");
+
+    return parsed.rules;
+  }
+
+  // ── [3] nhập thủ công ────────────────────────────────────────────
+  return await askIngressManual();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MENU CHỌN NGUỒN HOSTNAMES (workflowManageDns)
+//
+//   [1] Lấy hostname từ process.env — hiển thị danh sách
+//   [2] Nhập từ file .env
+//   [3] Nhập thủ công
+//
+// Trả về: mảng string hostnames hoặc null nếu hủy
+// ─────────────────────────────────────────────────────────────────
+
+async function selectHostnameSource(envVars) {
+  const envRules = readIngressFromEnv(envVars || {});
+
+  const sourceIdx = await selectMenu("Nguồn hostnames để tạo DNS records", [
+    { label: buildEnvHostnamesLabel(envRules) },
+    { label: "Nhập từ file .env (CLOUDFLARED_TUNNEL_HOSTNAME_N)" },
+    { label: "Nhập thủ công (từng hostname)" },
+  ]);
+
+  if (sourceIdx === -1) return null;
+
+  // ── [1] process.env ──────────────────────────────────────────────
+  if (sourceIdx === 0) {
+    if (envRules.length === 0) {
+      console.log(`\n${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N nào trong process.env.`);
+      console.log(`${LOG} Gợi ý: thêm vào .env: CLOUDFLARED_TUNNEL_HOSTNAME_1=app.yourdomain.com`);
+      return null;
+    }
+
+    console.log(`\n  Hostnames từ process.env (${envRules.length} hostname(s)):\n`);
+    envRules.forEach((r, i) => {
+      console.log(`    ${String(i + 1).padStart(2)}.  ${r.hostname}`);
+    });
+    console.log("");
+
+    const ok = await confirm("  Dùng danh sách hostname này?", true);
+    if (!ok) return null;
+
+    return envRules.map((r) => r.hostname);
+  }
+
+  // ── [2] file .env ────────────────────────────────────────────────
+  if (sourceIdx === 1) {
+    const envPath = await askFilePath("  Đường dẫn file .env");
+    if (!envPath) {
+      console.log("  Hủy.");
+      return null;
+    }
+
+    let parsed;
+    try {
+      parsed = parseEnvForIngress(envPath);
+    } catch (e) {
+      console.error(`${LOG} Không đọc được file .env: ${e.message}`);
+      return null;
+    }
+
+    if (parsed.rules.length === 0) {
+      console.log(`${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N trong file.`);
+      return null;
+    }
+
+    console.log(`\n  Tìm thấy ${parsed.rules.length} hostname(s):`);
+    parsed.rules.forEach((r) => console.log(`    • ${r.hostname}`));
+    console.log("");
+
+    return parsed.rules.map((r) => r.hostname);
+  }
+
+  // ── [3] nhập thủ công ────────────────────────────────────────────
+  return await askHostnamesManual();
+}
+
+// ─────────────────────────────────────────────────────────────────
 // DNS: Lấy zone ID từ hostname
 // ─────────────────────────────────────────────────────────────────
 
 function extractRootDomain(hostname) {
-  // Bỏ wildcard prefix nếu có (*.sub.domain.com → sub.domain.com → domain.com)
   const clean = hostname.replace(/^\*\./, "");
   const parts = clean.split(".");
   if (parts.length < 2) return clean;
   return parts.slice(-2).join(".");
 }
 
-/**
- * Lấy tất cả zones trong account (dùng để fallback khi không tìm được qua tên domain).
- * @returns Promise<Array<{ id, name, status }>>
- */
 async function listAllZones(account) {
   const res = await cloudflaredRequest({
     method: "GET",
@@ -268,9 +449,6 @@ async function listAllZones(account) {
   return (res.result || []).map((z) => ({ id: z.id, name: z.name, status: z.status }));
 }
 
-/**
- * Tìm zone theo hostname. Trả về { zoneId, zoneName } hoặc null nếu không tìm thấy.
- */
 async function tryGetZoneId(account, hostname) {
   const rootDomain = extractRootDomain(hostname);
 
@@ -364,8 +542,7 @@ async function updateDnsRecord(account, zoneId, recordId, hostname, tunnelId) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// DNS: Upsert CNAME record — nhận zoneId + zoneName đã được resolve
-// Returns: { hostname, action: 'created'|'updated'|'ok'|'error', ... }
+// DNS: Upsert CNAME record
 // ─────────────────────────────────────────────────────────────────
 
 async function upsertDnsRecord(account, hostname, tunnelId, zoneId, zoneName) {
@@ -399,21 +576,13 @@ async function upsertDnsRecord(account, hostname, tunnelId, zoneId, zoneName) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// DNS: Resolve zone cho hostname — auto lookup → fallback chọn từ danh sách
-//
-// Flow:
-//   1. Tự lookup theo root domain (2 level: domain.com)
-//   2. Nếu không tìm thấy → thử 3 level (sub.domain.com) cho wildcard domains
-//   3. Nếu vẫn không có → lấy toàn bộ zones trong account → cho user chọn
-//   4. Nếu account không có zone nào → báo lỗi + hướng dẫn
+// DNS: Resolve zone cho hostname với fallback chọn tay
 // ─────────────────────────────────────────────────────────────────
 
 async function resolveZoneForHostname(account, hostname, cachedZones) {
-  // Thử auto lookup 2-level root domain
   let found = await tryGetZoneId(account, hostname);
   if (found) return found;
 
-  // Thử 3-level (cho wildcard *.sub.domain.com → sub.domain.com)
   const clean = hostname.replace(/^\*\./, "");
   const parts = clean.split(".");
   if (parts.length >= 3) {
@@ -428,7 +597,6 @@ async function resolveZoneForHostname(account, hostname, cachedZones) {
     }
   }
 
-  // Fallback: hiển thị tất cả zones trong account để chọn thủ công
   console.log(`\n${LOG} Không tìm thấy zone tự động cho: ${hostname}`);
 
   let zones = cachedZones;
@@ -473,24 +641,12 @@ async function workflowManageDns(account, envVars) {
 
   console.log(`\n${LOG} Tunnel: ${selectedTunnel.name} (${tunnelId})`);
   console.log(`${LOG} Target CNAME: ${tunnelId}.cfargotunnel.com`);
+  console.log("");
 
-  // Lấy danh sách hostname từ env hoặc nhập tay
-  const envRules = readIngressFromEnv(envVars);
-  let hostnames = envRules.map((r) => r.hostname);
+  // Chọn nguồn hostname — menu 3 lựa chọn
+  const hostnames = await selectHostnameSource(envVars);
 
-  if (hostnames.length > 0) {
-    console.log(`\n${LOG} Phát hiện ${hostnames.length} hostname từ env vars:`);
-    hostnames.forEach((h, i) => console.log(`    ${i + 1}. ${h}`));
-    console.log("");
-    const useEnv = await confirm("  Dùng danh sách hostname này để tạo DNS records?", true);
-    if (!useEnv) hostnames = [];
-  }
-
-  if (hostnames.length === 0) {
-    hostnames = await askHostnamesManual();
-  }
-
-  if (hostnames.length === 0) {
+  if (!hostnames || hostnames.length === 0) {
     console.log(`${LOG} Không có hostname nào. Hủy.`);
     return;
   }
@@ -506,17 +662,14 @@ async function workflowManageDns(account, envVars) {
     return;
   }
 
-  // Cache zones để tránh gọi API list nhiều lần
   let cachedZones = null;
 
   const results = [];
   for (const hostname of hostnames) {
     process.stdout.write(`  ${hostname.padEnd(50)} ... `);
 
-    // Resolve zone (với fallback chọn tay)
     const zoneInfo = await resolveZoneForHostname(account, hostname, cachedZones);
 
-    // Cache zones nếu chưa có (chỉ fetch 1 lần)
     if (!cachedZones && !zoneInfo) {
       cachedZones = await listAllZones(account);
     }
@@ -536,7 +689,6 @@ async function workflowManageDns(account, envVars) {
     else console.log(`✗ lỗi: ${r.error}`);
   }
 
-  // Tổng kết
   const created = results.filter((r) => r.action === "created").length;
   const updated = results.filter((r) => r.action === "updated").length;
   const ok2 = results.filter((r) => r.action === "ok").length;
@@ -557,28 +709,6 @@ async function workflowManageDns(account, envVars) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HELPER: Nhập hostname thủ công
-// ─────────────────────────────────────────────────────────────────
-
-async function askHostnamesManual() {
-  const hostnames = [];
-  let addMore = true;
-
-  while (addMore) {
-    const n = hostnames.length + 1;
-    const hostname = await ask(`  Hostname ${n} (VD: app.yourdomain.com)`);
-    if (!hostname) break;
-
-    hostnames.push(hostname.trim());
-    if (hostnames.length >= 20) break;
-
-    addMore = await confirm("  Thêm hostname tiếp theo?", false);
-  }
-
-  return hostnames;
-}
-
-// ─────────────────────────────────────────────────────────────────
 // NGHIỆP VỤ: Tạo tunnel mới + xuất file + tạo DNS
 // ─────────────────────────────────────────────────────────────────
 
@@ -588,7 +718,6 @@ async function workflowCreateWithOutput(account, envVars) {
 
   await workflowOutputFiles(account, created.id, created.name, created.tunnelSecret, created.accountTag, envVars);
 
-  // Hỏi có muốn tạo DNS records ngay không
   const doDns = await confirm("\n  Tạo DNS records (CNAME) cho tunnel này ngay bây giờ?", true);
   if (doDns) {
     await workflowManageDns(account, envVars);
@@ -603,7 +732,6 @@ async function workflowExistingTunnel(account, envVars) {
   const tunnelList = await listTunnels(account);
   if (tunnelList.length === 0) return;
 
-  // Kiểm tra CLOUDFLARED_TUNNEL_NAME / CLOUDFLARED_TUNNEL_ID có sẵn không
   const envTunnelId = envVars["CLOUDFLARED_TUNNEL_ID"];
   const envTunnelName = envVars["CLOUDFLARED_TUNNEL_NAME"];
 
@@ -644,7 +772,6 @@ async function workflowExistingTunnel(account, envVars) {
     }
   }
 
-  // Hỏi nguồn secret — ưu tiên env
   let tunnelSecret;
   const envSecret = envVars["CLOUDFLARED_TUNNEL_SECRET"];
 
@@ -679,75 +806,21 @@ async function workflowExistingTunnel(account, envVars) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HELPER CHUNG: Hỏi ingress rules + ghi credentials.json + config.yml
+// HELPER CHUNG: Chọn ingress rules + ghi credentials.json + config.yml
 // ─────────────────────────────────────────────────────────────────
 
 async function workflowOutputFiles(account, tunnelId, tunnelName, tunnelSecret, accountTag, envVars) {
   console.log(`\n${LOG} Chuẩn bị xuất file cho tunnel: ${tunnelName} (${tunnelId})`);
+  console.log("");
 
-  // Kiểm tra ingress rules từ env
-  const envRules = readIngressFromEnv(envVars || {});
-  let ingressRules = [];
+  // Chọn nguồn ingress rules — menu 3 lựa chọn
+  const ingressRules = await selectIngressSource(envVars);
 
-  if (envRules.length > 0) {
-    console.log(`\n${LOG} Phát hiện ${envRules.length} ingress rule(s) từ env:`);
-    envRules.forEach((r, i) => console.log(`    ${i + 1}. ${r.hostname}  →  ${r.service}`));
-    console.log("");
-
-    const useEnvRules = await confirm("  Dùng ingress rules từ env này?", true);
-    if (useEnvRules) ingressRules = envRules;
-  }
-
-  if (ingressRules.length === 0) {
-    // Hỏi nguồn ingress
-    const ingressSourceIdx = await selectMenu("Nguồn ingress rules", [
-      { label: "Nhập từ file .env (CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N)" },
-      { label: "Nhập thủ công (từng hostname + service)" },
-    ]);
-    if (ingressSourceIdx === -1) return;
-
-    if (ingressSourceIdx === 0) {
-      console.log("\n  Format .env hỗ trợ:");
-      console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_1=yourdomain.com");
-      console.log("    CLOUDFLARED_TUNNEL_SERVICE_1=http://my-service:8080");
-      console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_2=sub.domain.com");
-      console.log("    CLOUDFLARED_TUNNEL_SERVICE_2=http://other:3000\n");
-
-      const envPath = await askFilePath("  Đường dẫn file .env");
-      if (!envPath) {
-        console.log("  Hủy.");
-        return;
-      }
-
-      let parsed;
-      try {
-        parsed = parseEnvForIngress(envPath);
-      } catch (e) {
-        console.error(`${LOG} Không đọc được file .env: ${e.message}`);
-        return;
-      }
-
-      if (parsed.rules.length === 0) {
-        console.log(`${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N trong .env.`);
-        const fallback = await confirm("  Nhập thủ công thay thế?", true);
-        if (!fallback) return;
-        ingressRules = await askIngressManual();
-      } else {
-        ingressRules = parsed.rules;
-        console.log(`\n  Tìm thấy ${ingressRules.length} ingress rule(s):`);
-        ingressRules.forEach((r) => console.log(`    • ${r.hostname} → ${r.service}`));
-      }
-    } else {
-      ingressRules = await askIngressManual();
-    }
-  }
-
-  if (ingressRules.length === 0) {
+  if (!ingressRules || ingressRules.length === 0) {
     console.log(`${LOG} Không có ingress rule nào. Hủy.`);
     return;
   }
 
-  // Chọn thư mục output
   const defaultOutputDir = process.cwd();
   const outputDirRaw = await ask(`  Thư mục output [${defaultOutputDir}]`);
   const outputDir = outputDirRaw ? path.resolve(outputDirRaw) : defaultOutputDir;
@@ -758,7 +831,6 @@ async function workflowOutputFiles(account, tunnelId, tunnelName, tunnelSecret, 
   const credFile = path.join(outputDir, `${safeSlug}-credentials.json`);
   const configFile = path.join(outputDir, `${safeSlug}-config.yml`);
 
-  // Preview
   console.log("\n  Tóm tắt sẽ xuất:");
   console.log(`    Tunnel ID    : ${tunnelId}`);
   console.log(`    Account Tag  : ${accountTag}`);
@@ -775,7 +847,6 @@ async function workflowOutputFiles(account, tunnelId, tunnelName, tunnelSecret, 
     return;
   }
 
-  // Ghi file
   const credContent = buildCredentialsJson(tunnelId, tunnelSecret, accountTag);
   const configContent = buildConfigYml(tunnelId, ingressRules);
 
@@ -797,7 +868,7 @@ async function workflowOutputFiles(account, tunnelId, tunnelName, tunnelSecret, 
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HELPER: Nhập ingress rules thủ công (hostname + service)
+// HELPER: Nhập ingress rules thủ công
 // ─────────────────────────────────────────────────────────────────
 
 async function askIngressManual() {
@@ -819,6 +890,28 @@ async function askIngressManual() {
   }
 
   return rules;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HELPER: Nhập hostname thủ công
+// ─────────────────────────────────────────────────────────────────
+
+async function askHostnamesManual() {
+  const hostnames = [];
+  let addMore = true;
+
+  while (addMore) {
+    const n = hostnames.length + 1;
+    const hostname = await ask(`  Hostname ${n} (VD: app.yourdomain.com)`);
+    if (!hostname) break;
+
+    hostnames.push(hostname.trim());
+    if (hostnames.length >= 20) break;
+
+    addMore = await confirm("  Thêm hostname tiếp theo?", false);
+  }
+
+  return hostnames;
 }
 
 // ─────────────────────────────────────────────────────────────────
