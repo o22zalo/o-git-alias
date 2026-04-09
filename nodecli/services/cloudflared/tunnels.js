@@ -687,6 +687,7 @@ async function workflowOutputFiles(account, tunnelId, tunnelName, tunnelSecret, 
 
   // Kiểm tra ingress rules từ env
   const envRules = readIngressFromEnv(envVars || {});
+  const processEnvRules = readIngressFromEnv(process.env || {});
   let ingressRules = [];
 
   if (envRules.length > 0) {
@@ -700,44 +701,65 @@ async function workflowOutputFiles(account, tunnelId, tunnelName, tunnelSecret, 
 
   if (ingressRules.length === 0) {
     // Hỏi nguồn ingress
-    const ingressSourceIdx = await selectMenu("Nguồn ingress rules", [
-      { label: "Nhập từ file .env (CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N)" },
-      { label: "Nhập thủ công (từng hostname + service)" },
-    ]);
-    if (ingressSourceIdx === -1) return;
+    while (ingressRules.length === 0) {
+      const ingressSourceIdx = await selectMenu("Nguồn ingress rules", [
+        { label: "Lấy từ process.env hiện tại (CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N)" },
+        { label: "Nhập từ file .env (CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N)" },
+        { label: "Nhập thủ công (từng hostname + service)" },
+      ]);
+      if (ingressSourceIdx === -1) return;
 
-    if (ingressSourceIdx === 0) {
-      console.log("\n  Format .env hỗ trợ:");
-      console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_1=yourdomain.com");
-      console.log("    CLOUDFLARED_TUNNEL_SERVICE_1=http://my-service:8080");
-      console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_2=sub.domain.com");
-      console.log("    CLOUDFLARED_TUNNEL_SERVICE_2=http://other:3000\n");
+      if (ingressSourceIdx === 0) {
+        if (processEnvRules.length === 0) {
+          console.log(`${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N trong process.env hiện tại.`);
+          const retry = await confirm("  Chọn nguồn khác?", true);
+          if (!retry) return;
+          continue;
+        }
 
-      const envPath = await askFilePath("  Đường dẫn file .env");
-      if (!envPath) {
-        console.log("  Hủy.");
-        return;
+        console.log(`\n${LOG} Tìm thấy ${processEnvRules.length} ingress rule(s) từ process.env:`);
+        processEnvRules.forEach((r) => console.log(`    • ${r.hostname} → ${r.service}`));
+        console.log("");
+        const useDetected = await confirm("  Dùng các giá trị này?", true);
+        if (!useDetected) continue;
+        ingressRules = processEnvRules;
+        continue;
       }
 
-      let parsed;
-      try {
-        parsed = parseEnvForIngress(envPath);
-      } catch (e) {
-        console.error(`${LOG} Không đọc được file .env: ${e.message}`);
-        return;
-      }
+      if (ingressSourceIdx === 1) {
+        console.log("\n  Format .env hỗ trợ:");
+        console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_1=yourdomain.com");
+        console.log("    CLOUDFLARED_TUNNEL_SERVICE_1=http://my-service:8080");
+        console.log("    CLOUDFLARED_TUNNEL_HOSTNAME_2=sub.domain.com");
+        console.log("    CLOUDFLARED_TUNNEL_SERVICE_2=http://other:3000\n");
 
-      if (parsed.rules.length === 0) {
-        console.log(`${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N trong .env.`);
-        const fallback = await confirm("  Nhập thủ công thay thế?", true);
-        if (!fallback) return;
-        ingressRules = await askIngressManual();
-      } else {
+        const envPath = await askFilePath("  Đường dẫn file .env");
+        if (!envPath) {
+          console.log("  Hủy.");
+          return;
+        }
+
+        let parsed;
+        try {
+          parsed = parseEnvForIngress(envPath);
+        } catch (e) {
+          console.error(`${LOG} Không đọc được file .env: ${e.message}`);
+          return;
+        }
+
+        if (parsed.rules.length === 0) {
+          console.log(`${LOG} Không tìm thấy CLOUDFLARED_TUNNEL_HOSTNAME_N + SERVICE_N trong .env.`);
+          const retry = await confirm("  Chọn nguồn khác?", true);
+          if (!retry) return;
+          continue;
+        }
+
         ingressRules = parsed.rules;
-        console.log(`\n  Tìm thấy ${ingressRules.length} ingress rule(s):`);
+        console.log(`\n${LOG} Tìm thấy ${ingressRules.length} ingress rule(s):`);
         ingressRules.forEach((r) => console.log(`    • ${r.hostname} → ${r.service}`));
+        continue;
       }
-    } else {
+
       ingressRules = await askIngressManual();
     }
   }
