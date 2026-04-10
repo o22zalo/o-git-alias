@@ -32,6 +32,7 @@ nodecli/
     cloudflared/
       index.js                      ← Subcommand ocli cloudflared
       tunnels.js                    ← Quản lý tunnels, DNS records, xuất credentials
+      apiTokens.js                  ← Sinh Account API Token (CF_API_TOKEN) cho cloudflared workflows
   templates/
     gh-secrets.json
     gh-secrets.env.example
@@ -263,3 +264,14 @@ accountid=YOUR_ACCOUNT_ID
 1. Tạo `services/<provider>/index.js` với `async function run()`
 2. Thêm vào `bin/ocli.js` trong object `SUBCOMMANDS`
 3. Cập nhật `README.md`, `ProjectStructure.md`, `DeveloperGuide.vi.md`
+
+## Cloudflared: sinh CF_API_TOKEN
+
+Menu `ocli cloudflared` có thêm flow để sinh **Account API Token** mới cho automation thay vì tiếp tục dùng Global API Key.
+
+Flow mới sẽ:
+1. nhận **bootstrap API token** dạng Bearer có quyền `Account API Tokens Write`
+2. lấy danh sách permission groups từ account hiện tại
+3. map theo profile dựng sẵn: `Tunnel only`, `Tunnel + DNS`, hoặc `Tunnel + DNS + Notifications`
+4. tạo token mới qua `POST /accounts/:account_id/tokens`
+5. in ra `CF_API_TOKEN=...` đúng 1 lần và có thể ghi vào `.env`

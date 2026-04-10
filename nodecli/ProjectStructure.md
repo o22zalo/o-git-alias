@@ -18,7 +18,7 @@ nodecli/
 │   ├── prompt.js               Helper tương tác: ask, confirm, selectMenu, askFilePath
 │   ├── shell.js                Helper shell: run, spawn, commandExists
 │   ├── azureApi.js             Helper gọi Azure DevOps REST API (https built-in, Basic auth)
-│   └── cloudflaredApi.js       Helper gọi Cloudflare REST API (https built-in, X-Auth-Key)
+│   └── cloudflaredApi.js       Helper gọi Cloudflare REST API (https built-in, X-Auth-Key hoặc Bearer API token)
 │                               Bao gồm: loadDotenv, loadCloudflaredEnv, listCloudflareAccounts
 │
 ├── services/                   Mỗi provider là một thư mục con, độc lập nhau
@@ -33,12 +33,13 @@ nodecli/
 │   │   └── index.js            Flow: đọc clipboard → parse path → ghi file → hỏi tiếp tục
 │   ├── addfiles/               Subcommand ocli addfiles — file/zip → cwd theo header path
 │   │   └── index.js            Flow: nhận file/zip → staging → parse // Path: → ghi/move → báo cáo
-│   └── cloudflared/            Subcommand ocli cloudflared — Cloudflare Tunnels + DNS
+│   └── cloudflared/            Subcommand ocli cloudflared — Cloudflare Tunnels + DNS + API tokens
 │       ├── index.js            Flow: load .env → chọn account → resolve accountid (config/env/API)
 │       │                             → hiển thị CLOUDFLARED_* env → chọn nghiệp vụ
 │       ├── tunnels.js          Nghiệp vụ: list / tạo / xuất credentials+config / DNS records / token / xóa
 │       │                       Đọc CLOUDFLARED_TUNNEL_* từ env để tự điền thông tin
-│       └── tunnelAlerts.js     Nghiệp vụ: Cloudflare Notification Policies cho tunnel health
+│       ├── tunnelAlerts.js     Nghiệp vụ: Cloudflare Notification Policies cho tunnel health
+│       └── apiTokens.js        Nghiệp vụ: sinh Account API Token (CF_API_TOKEN) cho cloudflared
 │
 ├── templates/                  File mẫu để user điền và truyền vào khi thao tác hàng loạt
 │   ├── gh-secrets.json         Mẫu JSON: key=value string
@@ -81,10 +82,15 @@ nodecli/.cloudflared-o-config
             │     ├── Tạo/list/xóa tunnel
             │     ├── Xuất credentials.json + config.yml
             │     └── Upsert CNAME records qua Cloudflare DNS API
-            └── services/cloudflared/tunnelAlerts.js
-                  ├── List Cloudflare alerting policies (lọc tunnel_health_alert)
-                  ├── Tạo Notification Policy gửi email khi tunnel đổi trạng thái
-                  └── Xóa Notification Policy
+            ├── services/cloudflared/tunnelAlerts.js
+            │     ├── List Cloudflare alerting policies (lọc tunnel_health_alert)
+            │     ├── Tạo Notification Policy gửi email khi tunnel đổi trạng thái
+            │     └── Xóa Notification Policy
+            └── services/cloudflared/apiTokens.js
+                  ├── Lấy account token permission groups qua Bearer bootstrap token
+                  ├── Map profile quyền Tunnel / DNS / Notifications
+                  ├── Tạo Account API Token mới qua API Cloudflare
+                  └── Ghi `CF_API_TOKEN=` vào file .env nếu user xác nhận
 
 Clipboard (OS):
       │
@@ -122,9 +128,10 @@ File / ZIP input:
 | services/azure/variables.js      | lib/azureApi, lib/prompt                                                    | lib/config, lib/shell                        |
 | services/clip/index.js           | lib/shell, lib/prompt                                                       | lib/config, lib/azureApi, lib/cloudflaredApi |
 | services/addfiles/index.js       | lib/shell, lib/prompt                                                       | lib/config, lib/azureApi, lib/cloudflaredApi |
-| services/cloudflared/index.js    | lib/cloudflaredApi, lib/prompt, cloudflared/tunnels                         | Các service khác                             |
+| services/cloudflared/index.js    | lib/cloudflaredApi, lib/prompt, cloudflared/tunnels, cloudflared/apiTokens  | Các service khác                             |
 | services/cloudflared/tunnels.js  | lib/cloudflaredApi, lib/prompt, cloudflared/tunnelAlerts                    | lib/config, lib/azureApi, lib/shell          |
 | services/cloudflared/tunnelAlerts.js | lib/cloudflaredApi, lib/prompt                                          | lib/config, lib/azureApi, lib/shell          |
+| services/cloudflared/apiTokens.js | lib/cloudflaredApi, lib/prompt, fs, path                                 | lib/config, lib/azureApi, lib/shell          |
 | lib/config.js                    | fs, path, os (built-in)                                                     | Không có                                     |
 | lib/prompt.js                    | readline (built-in)                                                         | Không có                                     |
 | lib/shell.js                     | child_process (built-in)                                                    | Không có                                     |
@@ -160,6 +167,7 @@ nodecli/services/addfiles/index.js
 nodecli/services/cloudflared/index.js
 nodecli/services/cloudflared/tunnels.js
 nodecli/services/cloudflared/tunnelAlerts.js
+nodecli/services/cloudflared/apiTokens.js
 nodecli/templates/gh-secrets.json
 nodecli/templates/gh-secrets.env.example
 nodecli/templates/azure-pipeline-vars.json

@@ -7,6 +7,7 @@
 const { loadCloudflaredSections, listCloudflareAccounts, loadCloudflaredEnv } = require("../../lib/cloudflaredApi");
 const { selectMenu, ask, confirm } = require("../../lib/prompt");
 const tunnels = require("./tunnels");
+const apiTokens = require("./apiTokens");
 
 const LOG = "[cloudflared]";
 
@@ -224,12 +225,16 @@ async function run() {
   while (true) {
     const groupIdx = await selectMenu(`Cloudflare — ${account.label} (${account.accountid})`, [
       { label: "Tunnels — tạo/quản lý tunnel, DNS records, xuất credentials + config Docker" },
+      { label: "CF_API_TOKEN — sinh Account API Token cho cloudflared workflows" },
       // Thêm nhóm chức năng mới ở đây (DNS, Workers, v.v.)
     ]);
     if (groupIdx === -1) break;
 
     if (groupIdx === 0) {
       await tunnels.run(account, envVars);
+    }
+    if (groupIdx === 1) {
+      await apiTokens.run(account, envVars);
     }
   }
 }

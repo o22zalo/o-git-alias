@@ -1,5 +1,50 @@
 # USER_CHANGELOG — nodecli / ocli
 
+## 2026-04-10 — cloudflared: thêm flow sinh CF_API_TOKEN qua Cloudflare Account Tokens API
+
+**Loại:** Feature
+
+### Những gì đã thêm
+
+**`lib/cloudflaredApi.js`:**
+
+- Mở rộng helper `cloudflaredRequest()` để hỗ trợ cả 2 kiểu auth:
+  - legacy `X-Auth-Email` + `X-Auth-Key`
+  - `Authorization: Bearer <API_TOKEN>`
+- Không làm thay đổi các flow tunnel/DNS hiện có dùng Global API Key
+
+**`services/cloudflared/apiTokens.js`:**
+
+- Thêm module mới để sinh **Account API Token** cho biến `CF_API_TOKEN`
+- Hỗ trợ nhập bootstrap token (Bearer) để gọi:
+  - `GET /accounts/:account_id/tokens/permission_groups`
+  - `POST /accounts/:account_id/tokens`
+- Thêm 3 profile quyền dựng sẵn:
+  - `Tunnel only`
+  - `Tunnel + DNS`
+  - `Tunnel + DNS + Notifications` *(khuyên dùng cho project hiện tại)*
+- Tự map permission groups theo tên/alias để tương thích giữa các cách đặt tên kiểu `Write/Edit`
+- Dùng 2 policy scope riêng:
+  - account scope cho quyền account-level như Tunnel / Notifications
+  - zone scope cho quyền DNS trên toàn bộ zones trong account
+- In ra `CF_API_TOKEN=...` đúng 1 lần sau khi tạo thành công
+- Cho phép ghi thẳng `CF_API_TOKEN` vào file `.env`
+
+**`services/cloudflared/index.js`:**
+
+- Thêm menu group mới:
+  - `CF_API_TOKEN — sinh Account API Token cho cloudflared workflows`
+
+**`README.md` + `ProjectStructure.md`:**
+
+- Cập nhật tài liệu để phản ánh flow Bearer bootstrap token và module `apiTokens.js`
+
+### Lưu ý vận hành
+
+- Cloudflare endpoint tạo account token yêu cầu **bootstrap API token** có quyền `Account API Tokens Write`
+- Bootstrap token này là token mồi để sinh token mới, không dùng cặp `email + apikey` legacy
+- Token mới sinh ra phù hợp hơn cho automation thay vì tiếp tục dùng Global API Key
+
 ## 2026-04-10 — cloudflared: thêm Tunnel Health Alert Notification Policies qua Cloudflare Alerting API
 
 **Loại:** Feature

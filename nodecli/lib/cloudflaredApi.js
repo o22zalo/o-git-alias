@@ -150,9 +150,19 @@ function loadCloudflaredSections() {
 // Build auth headers từ account object
 // ─────────────────────────────────────────────────────────────────
 
-function buildHeaders(account, extraHeaders = {}) {
-  if (!account.email || !account.apikey) {
-    throw new Error(`${LOG} Thiếu email hoặc apikey cho account: ${account.label}`);
+function buildHeaders(account, extraHeaders = {}, apiToken = "") {
+  const trimmedToken = String(apiToken || "").trim();
+  if (trimmedToken) {
+    return {
+      Authorization: `Bearer ${trimmedToken}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...extraHeaders,
+    };
+  }
+
+  if (!account || !account.email || !account.apikey) {
+    throw new Error(`${LOG} Thiếu email hoặc apikey cho account${account && account.label ? `: ${account.label}` : ""}`);
   }
   return {
     "X-Auth-Email": account.email,
@@ -179,11 +189,11 @@ function buildHeaders(account, extraHeaders = {}) {
  * @returns Promise<{ ok, status, result, errors, messages, raw }>
  */
 function cloudflaredRequest(opts) {
-  const { method = "GET", path: apiPath, body, account } = opts;
+  const { method = "GET", path: apiPath, body, account, apiToken = "" } = opts;
 
   let headers;
   try {
-    headers = buildHeaders(account);
+    headers = buildHeaders(account, {}, apiToken);
   } catch (e) {
     return Promise.reject(e);
   }
