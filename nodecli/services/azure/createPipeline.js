@@ -54,7 +54,11 @@ async function listYamlFiles(org, project, repoId, account) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Lấy agent queue đầu tiên trong project (dùng để khai báo queue khi tạo pipeline)
+// Lấy danh sách agent queues trong project.
+// Lưu ý:
+//   - Build definition YAML vẫn nên có `pool` trong file YAML.
+//   - Nhưng nhiều org/project vẫn bắt buộc "Default agent pool for YAML" ở definition.
+//     Vì vậy khi tạo pipeline qua API, cần gắn queue mặc định ngay từ đầu.
 // ─────────────────────────────────────────────────────────────────
 
 async function listQueues(org, project, account) {
@@ -168,13 +172,45 @@ async function run(org, project, account) {
   const pipelineName = await ask('  Tên pipeline mới', defaultPipelineName);
   if (!pipelineName) { console.log('  Hủy.'); return null; }
 
-  // ── Bước 4: Lấy queue (không bắt buộc) ───────────────────────
+  // ── Bước 4: Chọn queue mặc định cho YAML (bắt buộc) ───────────
   let queueId = null;
+  let queueName = '';
   try {
     const queues = await listQueues(org, project, account);
-    if (queues.length > 0) queueId = queues[0].id;
+    if (queues.length === 0) {
+      console.error(`${LOG} Không có agent queue nào trong project.`);
+      console.error(`${LOG} Hãy tạo/authorize queue (ví dụ: Azure Pipelines) rồi chạy lại.`);
+      return null;
+    }
+
+    const preferredIdx = queues.findIndex((q) => {
+      const qn = (q && q.name ? String(q.name) : '').toLowerCase();
+      const pn = (q && q.pool && q.pool.name ? String(q.pool.name) : '').toLowerCase();
+      return qn === 'azure pipelines' || pn === 'azure pipelines';
+    });
+
+    const queueIdx = await selectMenu(
+      `Chọn default agent pool for YAML (${queues.length} queue)`,
+      queues.map((q, idx) => {
+        const isPreferred = idx === preferredIdx;
+        const poolName = q && q.pool && q.pool.name ? q.pool.name : '';
+        const suffix = isPreferred ? '  ← khuyến nghị (Microsoft-hosted)' : '';
+        return {
+          label: `[${String(q.id).padStart(4)}]  ${q.name}${poolName ? ` (pool: ${poolName})` : ''}${suffix}`,
+        };
+      })
+    );
+
+    if (queueIdx === -1) {
+      console.log('  Hủy.');
+      return null;
+    }
+
+    queueId = queues[queueIdx].id;
+    queueName = queues[queueIdx].name;
   } catch (e) {
-    console.error(`${LOG} Cảnh báo: không lấy được queue — sẽ tạo pipeline không kèm queue.`);
+    console.error(`${LOG} Không lấy được queue mặc định cho YAML: ${e.message}`);
+    return null;
   }
 
   // ── Bước 5: Build payload và xác nhận ────────────────────────
@@ -210,16 +246,14 @@ async function run(org, project, account) {
     },
   };
 
-  if (queueId) {
-    body.queue = { id: queueId };
-  }
+  body.queue = { id: queueId };
 
   console.log('\n  Tóm tắt pipeline sẽ tạo:');
   console.log(`    • Name   : ${pipelineName}`);
   console.log(`    • Repo   : ${selectedRepo.name}`);
   console.log(`    • YAML   : ${selectedYaml}`);
   console.log(`    • Branch : ${resolvedBranch}`);
-  if (queueId) console.log(`    • Queue  : ${queueId}`);
+  console.log(`    • Queue  : ${queueName || queueId} (id=${queueId})`);
   console.log('');
 
   const ok = await confirm('  Xác nhận tạo pipeline?', true);
