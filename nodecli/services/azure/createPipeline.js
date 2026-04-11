@@ -62,19 +62,38 @@ async function listYamlFiles(org, project, repoId, account) {
 // ─────────────────────────────────────────────────────────────────
 
 async function listQueues(org, project, account) {
-  const res = await azureRequest({
-    method: 'GET',
-    org,
-    path: `${encodeURIComponent(project)}/_apis/build/queues?api-version=${API_VERSION}`,
-    account,
-  });
+  const candidatePaths = [
+    // Endpoint cũ cho Build definitions (nhiều org vẫn dùng được)
+    `${encodeURIComponent(project)}/_apis/build/queues?api-version=${API_VERSION}`,
+    // Endpoint queue chuẩn theo Distributed Task, project-scoped
+    `${encodeURIComponent(project)}/_apis/distributedtask/queues?api-version=${API_VERSION}`,
+    // Fallback org-scoped (một số org/project trả 404 ở project-scoped)
+    `_apis/distributedtask/queues?api-version=${API_VERSION}`,
+  ];
 
-  if (!res.ok) {
+  const errors = [];
+  for (const path of candidatePaths) {
+    const res = await azureRequest({
+      method: 'GET',
+      org,
+      path,
+      account,
+    });
+
+    if (res.ok) {
+      return (res.data && res.data.value) || [];
+    }
+
     const msg = res.data && res.data.message ? res.data.message : `status ${res.status}`;
-    throw new Error(`${LOG} Không lấy được danh sách queues: ${msg}`);
+    errors.push(`${path} -> ${msg}`);
+
+    // 401/403 thì dừng luôn vì là lỗi quyền/auth, không cần thử endpoint khác.
+    if (res.status === 401 || res.status === 403) {
+      break;
+    }
   }
 
-  return (res.data && res.data.value) || [];
+  throw new Error(`${LOG} Không lấy được danh sách queues (đã thử nhiều endpoint): ${errors.join(' | ')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────
