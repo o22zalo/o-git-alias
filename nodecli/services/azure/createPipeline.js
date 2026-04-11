@@ -208,25 +208,30 @@ async function run(org, project, account) {
       return qn === 'azure pipelines' || pn === 'azure pipelines';
     });
 
-    const queueIdx = await selectMenu(
-      `Chọn default agent pool for YAML (${queues.length} queue)`,
-      queues.map((q, idx) => {
-        const isPreferred = idx === preferredIdx;
-        const poolName = q && q.pool && q.pool.name ? q.pool.name : '';
-        const suffix = isPreferred ? '  ← khuyến nghị (Microsoft-hosted)' : '';
-        return {
-          label: `[${String(q.id).padStart(4)}]  ${q.name}${poolName ? ` (pool: ${poolName})` : ''}${suffix}`,
-        };
-      })
-    );
+    if (preferredIdx >= 0) {
+      // Theo yêu cầu: nếu có "Azure Pipelines" thì auto chọn luôn, không hỏi user.
+      queueId = queues[preferredIdx].id;
+      queueName = queues[preferredIdx].name;
+      console.log(`${LOG} Tự động chọn default agent pool for YAML: ${queueName} (id=${queueId})`);
+    } else {
+      const queueIdx = await selectMenu(
+        `Chọn default agent pool for YAML (${queues.length} queue)`,
+        queues.map((q) => {
+          const poolName = q && q.pool && q.pool.name ? q.pool.name : '';
+          return {
+            label: `[${String(q.id).padStart(4)}]  ${q.name}${poolName ? ` (pool: ${poolName})` : ''}`,
+          };
+        })
+      );
 
-    if (queueIdx === -1) {
-      console.log('  Hủy.');
-      return null;
+      if (queueIdx === -1) {
+        console.log('  Hủy.');
+        return null;
+      }
+
+      queueId = queues[queueIdx].id;
+      queueName = queues[queueIdx].name;
     }
-
-    queueId = queues[queueIdx].id;
-    queueName = queues[queueIdx].name;
   } catch (e) {
     console.error(`${LOG} Không lấy được queue mặc định cho YAML: ${e.message}`);
     return null;
