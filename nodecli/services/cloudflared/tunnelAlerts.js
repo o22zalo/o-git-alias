@@ -5,7 +5,8 @@ const { cloudflaredRequest } = require("../../lib/cloudflaredApi");
 const { ask, confirm, selectMenu } = require("../../lib/prompt");
 
 const LOG = "[tunnel-alerts]";
-const ALERT_TYPE = "tunnel_health_alert";
+const ALERT_TYPE = "tunnel_health_event";
+const LISTABLE_ALERT_TYPES = new Set([ALERT_TYPE, "tunnel_health_alert"]);
 const DEFAULT_EMAIL = "ongtrieuhau861@gmail.com";
 const DEFAULT_NAME = "Tunnel Health Alert";
 
@@ -53,7 +54,9 @@ async function listAlertPolicies(account) {
     return [];
   }
 
-  const policies = Array.isArray(res.result) ? res.result.filter((item) => item && item.alert_type === ALERT_TYPE) : [];
+  const policies = Array.isArray(res.result)
+    ? res.result.filter((item) => item && LISTABLE_ALERT_TYPES.has(String(item.alert_type || "")))
+    : [];
 
   if (policies.length === 0) {
     console.log(`${LOG} Chưa có policy nào.`);

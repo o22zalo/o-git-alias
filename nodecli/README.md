@@ -147,7 +147,7 @@ Khi khởi động, ocli hiển thị các biến `CLOUDFLARED_*` phát hiện �
 
 **Notification Policies (Tunnel Health Alert):**
 - Tạo Notification Policy qua Cloudflare Alerting API (`/alerting/v3/policies`)
-- Dùng `alert_type=tunnel_health_alert` cho Cloudflare Zero Trust Tunnels (`cfd_tunnel`)
+- Dùng `alert_type=tunnel_health_event` cho Cloudflare Zero Trust Tunnels
 - Không filter tunnel ID — policy áp dụng cho toàn bộ tunnels trong account
 - Khi tunnel đổi trạng thái healthy / degraded / down, Cloudflare sẽ gửi email theo policy
 - Hỗ trợ xem danh sách policy, tạo mới, xóa policy ngay trong menu `cloudflared`

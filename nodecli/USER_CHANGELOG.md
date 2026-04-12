@@ -53,7 +53,7 @@
 
 **`services/cloudflared/tunnelAlerts.js`:**
 
-- Thêm module mới để quản lý Cloudflare Alerting v3 policies cho `tunnel_health_alert`
+- Thêm module mới để quản lý Cloudflare Alerting v3 policies cho `tunnel_health_event`
 - Hỗ trợ `GET /accounts/:account_id/alerting/v3/policies` và lọc riêng policy của Zero Trust Tunnel
 - Hỗ trợ `POST /accounts/:account_id/alerting/v3/policies` với `filters: {}` để nhận email khi tunnel đổi trạng thái `healthy / degraded / down`
 - Hỗ trợ `DELETE /accounts/:account_id/alerting/v3/policies/:policy_id`

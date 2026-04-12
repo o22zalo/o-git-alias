@@ -83,7 +83,7 @@ nodecli/.cloudflared-o-config
             │     ├── Xuất credentials.json + config.yml
             │     └── Upsert CNAME records qua Cloudflare DNS API
             ├── services/cloudflared/tunnelAlerts.js
-            │     ├── List Cloudflare alerting policies (lọc tunnel_health_alert)
+            │     ├── List Cloudflare alerting policies (lọc tunnel_health_event)
             │     ├── Tạo Notification Policy gửi email khi tunnel đổi trạng thái
             │     └── Xóa Notification Policy
             └── services/cloudflared/apiTokens.js
