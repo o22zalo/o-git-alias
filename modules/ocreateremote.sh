@@ -15,6 +15,7 @@
 #   4. Hỏi description   (default: rỗng, tùy chọn)
 #   5. Confirm summary   → gọi API
 #   6. Lưu URL vào .git/config: o.url nếu chưa có, không thì o.url0..o.url9
+#      rồi tự mở .git/config bằng `git oconfig`
 # =============================================================================
 
 [[ -n "${_O_MODULE_CREATEREMOTE_LOADED:-}" ]] && return 0
@@ -188,6 +189,10 @@ function _o_save_result() {
         if [[ -n "$slot" ]]; then
             git config "$slot" "$detected_url"
             echo "  ✓ Đã lưu   : $slot  →  $detected_url"
+            echo "  → Mở .git/config: git oconfig"
+            if ! git oconfig; then
+                echo "  WARN: Không mở được .git/config bằng 'git oconfig'. Bạn có thể mở thủ công bằng: git oconfig" >&2
+            fi
             echo ""
             if [[ "$slot" == "o.url" ]]; then
                 echo "  Bước tiếp: git opush"
@@ -202,10 +207,10 @@ function _o_save_result() {
         # Trích thông báo lỗi từ JSON response
         local err_msg=""
         if echo "$resp" | grep -q '"message"'; then
-            err_msg=$(echo "$resp" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4)
+            err_msg=$(echo "$resp" | grep -oE '"message"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
         fi
         if [[ -z "$err_msg" ]] && echo "$resp" | grep -q '"error"'; then
-            err_msg=$(echo "$resp" | grep -o '"error":"[^"]*"' | head -1 | cut -d'"' -f4)
+            err_msg=$(echo "$resp" | grep -oE '"error"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
         fi
 
         echo ""
@@ -236,12 +241,12 @@ function _o_create_github() {
     # GitHub trả "clone_url" trực tiếp — dùng field này thay vì html_url
     # để tránh bị nhiễu bởi "owner.html_url" nested trong JSON
     local clone_url
-    clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+    clone_url=$(echo "$resp" | grep -oE '"clone_url"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
 
     # Nếu org endpoint trả lỗi (owner là personal account) → fallback /user/repos
     if [[ -z "$clone_url" ]]; then
         resp=$(_o_curl_api POST "https://api.github.com/user/repos" "$body" "$dry_run")
-        clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+        clone_url=$(echo "$resp" | grep -oE '"clone_url"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
 
     _o_save_result "$resp" "$clone_url" "https://github.com/${owner}/${repo_name}.git"
@@ -264,7 +269,7 @@ function _o_create_gitlab() {
     [[ "$dry_run" == "1" ]] && return 0
 
     local clone_url
-    clone_url=$(echo "$resp" | grep -o '"http_url_to_repo":"[^"]*"' | head -1 | cut -d'"' -f4)
+    clone_url=$(echo "$resp" | grep -oE '"http_url_to_repo"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     _o_save_result "$resp" "$clone_url" "https://${host}/${owner}/${repo_name}.git"
 }
 
@@ -282,10 +287,10 @@ function _o_create_gitea() {
     [[ "$dry_run" == "1" ]] && return 0
 
     local clone_url
-    clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+    clone_url=$(echo "$resp" | grep -oE '"clone_url"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     if [[ -z "$clone_url" ]]; then
         resp=$(_o_curl_api POST "https://${host}/api/v1/user/repos" "$body" "$dry_run")
-        clone_url=$(echo "$resp" | grep -o '"clone_url":"[^"]*"' | head -1 | cut -d'"' -f4)
+        clone_url=$(echo "$resp" | grep -oE '"clone_url"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
     _o_save_result "$resp" "$clone_url" "https://${host}/${owner}/${repo_name}.git"
 }
@@ -305,7 +310,7 @@ function _o_create_bitbucket() {
     [[ "$dry_run" == "1" ]] && return 0
 
     local clone_url
-    clone_url=$(echo "$resp" | grep -o '"href":"https://[^"]*\.git"' | head -1 | cut -d'"' -f4)
+    clone_url=$(echo "$resp" | grep -oE '"href"[[:space:]]*:[[:space:]]*"https://[^"]*\.git"' | head -1 | cut -d'"' -f4)
     _o_save_result "$resp" "$clone_url" "https://bitbucket.org/${owner}/${slug}.git"
 }
 
@@ -338,7 +343,7 @@ function _o_azure_list_projects() {
 
     # Trích tên project từ JSON: "name":"<value>"
     # Azure trả về mảng value[].name
-    echo "$resp" | grep -o '"name":"[^"]*"' | cut -d'"' -f4
+    echo "$resp" | grep -oE '"name"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4
 }
 
 # ---------------------------------------------------------------------------
@@ -429,7 +434,7 @@ function _o_create_azure() {
     [[ "$dry_run" == "1" ]] && return 0
 
     local remote_url
-    remote_url=$(echo "$resp" | grep -o '"remoteUrl":"[^"]*"' | head -1 | cut -d'"' -f4)
+    remote_url=$(echo "$resp" | grep -oE '"remoteUrl"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
     _o_save_result "$resp" "$remote_url" \
         "https://dev.azure.com/${owner}/${azure_project}/_git/${repo_name}"
 }
@@ -445,7 +450,7 @@ function _o_create_azure() {
 #   3. Visibility            (default: private)
 #   4. Mô tả                 (optional)
 #   5. [Azure] Chọn project  (từ config / API / nhập tay)
-#   6. Confirm → tạo → tự lưu URL vào o.url / o.url0..9
+#   6. Confirm → tạo → tự lưu URL vào o.url / o.url0..9 → mở `git oconfig`
 # =============================================================================
 function ocreateremote() {
     local dry_run="0"
