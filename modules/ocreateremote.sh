@@ -514,8 +514,13 @@ function ocreateremote() {
     _o_parse_section "$selected"
     # _O_HOST, _O_OWNER, _O_AZURE_PROJECT_FROM_CONFIG đã được set
 
-    # Resolve auth ngay để dùng cho API list projects (Azure)
-    _o_resolve_auth "https://${_O_HOST}/${_O_OWNER}"
+    # FIX: Đưa project vào auth URL khi section có dạng host/owner/project.
+    # Cơ chế longest-prefix-match của _o_resolve_auth so sánh URL với section key:
+    #   section [dev.azure.com/org/proj] cần URL chứa "dev.azure.com/org/proj"
+    #   để khớp — nếu chỉ truyền "…/org" sẽ không tìm thấy section → auth thất bại.
+    local _auth_url="https://${_O_HOST}/${_O_OWNER}"
+    [[ -n "$_O_AZURE_PROJECT_FROM_CONFIG" ]] && _auth_url="${_auth_url}/${_O_AZURE_PROJECT_FROM_CONFIG}"
+    _o_resolve_auth "$_auth_url"
 
     local provider
     provider=$(_o_detect_provider "$_O_HOST")
