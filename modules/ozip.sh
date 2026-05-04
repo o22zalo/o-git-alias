@@ -413,19 +413,38 @@ function ozip() {
         [[ -n "$file_size" ]] && echo "  ✓ Size : $file_size"
         echo ""
 
-        # Hỏi có muốn mở thư mục Downloads trong Explorer không
-        local confirm_open
-        read -r -p "  Mở thư mục Downloads trong Explorer? [Y/n]: " confirm_open
-        confirm_open="${confirm_open:-Y}"
+        # Hỏi có muốn copy đường dẫn file ZIP vào clipboard không
+        local confirm_copy_path
+        read -r -p "  Copy đường dẫn file ZIP vào clipboard? [Y/n]: " confirm_copy_path
+        confirm_copy_path="${confirm_copy_path:-Y}"
 
-        if [[ "${confirm_open,,}" == "y" ]]; then
-            local win_path
+        if [[ "${confirm_copy_path,,}" == "y" ]]; then
+            local clip_path="$out_path"
+
+            # Trên Windows Git Bash, ưu tiên copy đường dẫn dạng Windows cho tiện dán vào Explorer/ứng dụng Windows
             if command -v cygpath &>/dev/null; then
-                win_path=$(cygpath -w "$downloads_dir" 2>/dev/null || echo "$downloads_dir")
-            else
-                win_path="${downloads_dir//\//\\}"
+                clip_path=$(cygpath -w "$out_path" 2>/dev/null || echo "$out_path")
             fi
-            explorer.exe "$win_path" 2>/dev/null || true
+
+            if command -v clip.exe &>/dev/null; then
+                printf '%s' "$clip_path" | clip.exe
+                echo "  ✓ Đã copy đường dẫn vào clipboard: $clip_path"
+            elif command -v powershell.exe &>/dev/null; then
+                printf '%s' "$clip_path" | powershell.exe -NoProfile -Command "Set-Clipboard -Value ([Console]::In.ReadToEnd())" >/dev/null 2>&1
+                echo "  ✓ Đã copy đường dẫn vào clipboard: $clip_path"
+            elif command -v pbcopy &>/dev/null; then
+                printf '%s' "$clip_path" | pbcopy
+                echo "  ✓ Đã copy đường dẫn vào clipboard: $clip_path"
+            elif command -v xclip &>/dev/null; then
+                printf '%s' "$clip_path" | xclip -selection clipboard
+                echo "  ✓ Đã copy đường dẫn vào clipboard: $clip_path"
+            elif command -v xsel &>/dev/null; then
+                printf '%s' "$clip_path" | xsel --clipboard --input
+                echo "  ✓ Đã copy đường dẫn vào clipboard: $clip_path"
+            else
+                echo "  ⚠ Không tìm thấy công cụ clipboard phù hợp. Hãy copy thủ công đường dẫn sau:"
+                echo "    $clip_path"
+            fi
         fi
     else
         echo "  ✗ Download thất bại (curl exit: $curl_exit)." >&2
