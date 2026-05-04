@@ -42,6 +42,7 @@ function _oe_print_menu() {
     echo "  │  15   git addfile omessage    git af     tạo .opushforce.message"
     echo "  │  16   git addfile ogitignore  git af     tạo / cập nhật .gitignore"
     echo "  │  17   git oclone              git ocl    clone repo từ o.url"
+    echo "  │  18   git ozip               git oz     download source ZIP từ remote branch"
     echo "  │"
     echo "  │   0   Thoát"
     echo "  │"
@@ -166,6 +167,11 @@ function _oe_run() {
             echo ""
             oclone $dest
             ;;
+        18)
+            echo "  → git ozip"
+            echo ""
+            ozip
+            ;;
         0)
             echo "  Thoát."
             return 0
@@ -189,12 +195,12 @@ function oexecute() {
     while true; do
         _oe_print_menu
 
-        read -r -p "  Chọn số thứ tự [0-17]: " choice
+        read -r -p "  Chọn số thứ tự [0-18]: " choice
 
         # Validate input
-        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 17 )); then
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 18 )); then
             echo ""
-            echo "  ⚠ Nhập số từ 0 đến 17."
+            echo "  ⚠ Nhập số từ 0 đến 18."
             sleep 1
             continue
         fi

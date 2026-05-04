@@ -18,6 +18,7 @@ _O_MODULE_ADDFILE_LOADED=1
 # TEMPLATE: .gitignore cho Node.js
 # ---------------------------------------------------------------------------
 _O_GITIGNORE_NODEJS='# ── Node.js ──────────────────────────────────────────
+*gitignore/**
 node_modules/
 npm-debug.log*
 yarn-debug.log*

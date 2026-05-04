@@ -50,6 +50,7 @@ $Aliases = @(
     @("oconfigclean", "oconfigclean"),
     @("ocreateremote", "ocreateremote"),
     @("addfile", "addfile"),
+    @("ozip", "ozip"),
     # Viết tắt (trỏ cùng hàm)
     @("oe", "oexecute"),
     @("oac", "oaddcommit"),
@@ -66,7 +67,8 @@ $Aliases = @(
     @("oc", "oconfig"),
     @("occ", "oconfigclean"),
     @("ocr", "ocreateremote"),
-    @("af", "addfile")
+    @("af", "addfile"),
+    @("oz", "ozip")
 )
 $Count = 0
 
@@ -100,7 +102,7 @@ Write-Host "  git oexecute         git oe     ← Menu chon lenh"
 Write-Host "  git oaddcommit       git oac"
 Write-Host "  git oclone           git ocl"
 Write-Host "  git opull            git opl"
-Write-Host "  git opullbranch      git oplb   ← MOI: fetch + lay noi dung branch"
+Write-Host "  git opullbranch      git oplb   ← fetch + lay noi dung branch"
 Write-Host "  git opush            git ops"
 Write-Host "  git opushforce       git opf"
 Write-Host "  git opushforceurl    git opfurl"
@@ -114,6 +116,7 @@ Write-Host "  git ocreateremote    git ocr"
 Write-Host "  git addfile          git af"
 Write-Host "    addfile omessage"
 Write-Host "    addfile ogitignore"
+Write-Host "  git ozip             git oz    ← MOI: download source ZIP"
 Write-Host ""
 Write-Host " Kiem tra : git config --global --list"
 Write-Host " Thu ngay : git oe"
