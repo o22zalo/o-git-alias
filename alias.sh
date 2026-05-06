@@ -42,6 +42,8 @@
 #   git config --global alias.oplb           "!source \"$SCRIPT\" && opullbranch"
 #   git config --global alias.ozip           "!source \"$SCRIPT\" && ozip"
 #   git config --global alias.oz             "!source \"$SCRIPT\" && ozip"
+#   git config --global alias.oreinit        "!source \"$SCRIPT\" && oreinit"
+#   git config --global alias.ori            "!source \"$SCRIPT\" && oreinit"
 #
 # =============================================================================
 
@@ -74,6 +76,7 @@ function o() {
     echo "  git ostash            git ost    stash drop + clean working dir"
     echo "  git ofetch            git oft    fetch từ o.url"
     echo "  git oinit [url]       git oi     git init + ghi .git/config + file helper"
+    echo "  git oreinit [msg]     git ori    xóa history, giữ config, init lại repo"
     echo "  git oconfig           git oc     mở .git/config bằng VSCode"
     echo "  git ocreateremote     git ocr    tạo remote repo mới qua API provider"
     echo "  git ozip              git oz     download source ZIP từ remote branch"
@@ -550,6 +553,9 @@ _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
 
 [[ -f "${_O_MODULES_DIR}/ozip.sh" ]] \
     && source "${_O_MODULES_DIR}/ozip.sh"
+
+[[ -f "${_O_MODULES_DIR}/oreinit.sh" ]] \
+    && source "${_O_MODULES_DIR}/oreinit.sh"
 
 [[ -f "${_O_MODULES_DIR}/oexecute.sh" ]] \
     && source "${_O_MODULES_DIR}/oexecute.sh"

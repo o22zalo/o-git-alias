@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # setup-git-aliases.ps1
 # Dang ky git global aliases - dung Windows path co dinh cho alias.sh
 # Chay: Right-click -> "Run with PowerShell"
@@ -46,6 +46,7 @@ $Aliases = @(
     @("ostash", "ostash"),
     @("ofetch", "ofetch"),
     @("oinit", "oinit"),
+    @("oreinit", "oreinit"),
     @("oconfig", "oconfig"),
     @("oconfigclean", "oconfigclean"),
     @("ocreateremote", "ocreateremote"),
@@ -64,6 +65,7 @@ $Aliases = @(
     @("ost", "ostash"),
     @("oft", "ofetch"),
     @("oi", "oinit"),
+    @("ori", "oreinit"),
     @("oc", "oconfig"),
     @("occ", "oconfigclean"),
     @("ocr", "ocreateremote"),
@@ -110,13 +112,14 @@ Write-Host "  git opullpush        git opp"
 Write-Host "  git ostash           git ost"
 Write-Host "  git ofetch           git oft"
 Write-Host "  git oinit            git oi    ← git init + file helper mac dinh"
+Write-Host "  git oreinit [msg]    git ori   ← MOI: xoa history, giu config, init lai"
 Write-Host "  git oconfig          git oc"
 Write-Host "  git oconfigclean     git occ"
 Write-Host "  git ocreateremote    git ocr"
 Write-Host "  git addfile          git af"
 Write-Host "    addfile omessage"
 Write-Host "    addfile ogitignore"
-Write-Host "  git ozip             git oz    ← MOI: download source ZIP"
+Write-Host "  git ozip             git oz    ← download source ZIP"
 Write-Host ""
 Write-Host " Kiem tra : git config --global --list"
 Write-Host " Thu ngay : git oe"

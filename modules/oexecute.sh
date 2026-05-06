@@ -35,14 +35,15 @@ function _oe_print_menu() {
     echo "  │   8   git ofetch              git oft    fetch từ o.url"
     echo "  │   9   git ostash              git ost    stash drop + clean"
     echo "  │  10   git oinit               git oi     git init + file helper mặc định"
-    echo "  │  11   git oconfig             git oc     mở .git/config bằng VSCode"
-    echo "  │  12   git oconfigclean        git occ    xóa alias local .git/config"
-    echo "  │  13   git ocreateremote       git ocr    tạo remote repo qua API"
-    echo "  │  14   git addfile packagejson git af     tạo / cập nhật package.json"
-    echo "  │  15   git addfile omessage    git af     tạo .opushforce.message"
-    echo "  │  16   git addfile ogitignore  git af     tạo / cập nhật .gitignore"
-    echo "  │  17   git oclone              git ocl    clone repo từ o.url"
-    echo "  │  18   git ozip               git oz     download source ZIP từ remote branch"
+    echo "  │  11   git oreinit             git ori    xóa history, giữ config, init lại"
+    echo "  │  12   git oconfig             git oc     mở .git/config bằng VSCode"
+    echo "  │  13   git oconfigclean        git occ    xóa alias local .git/config"
+    echo "  │  14   git ocreateremote       git ocr    tạo remote repo qua API"
+    echo "  │  15   git addfile packagejson git af     tạo / cập nhật package.json"
+    echo "  │  16   git addfile omessage    git af     tạo .opushforce.message"
+    echo "  │  17   git addfile ogitignore  git af     tạo / cập nhật .gitignore"
+    echo "  │  18   git oclone              git ocl    clone repo từ o.url"
+    echo "  │  19   git ozip               git oz     download source ZIP từ remote branch"
     echo "  │"
     echo "  │   0   Thoát"
     echo "  │"
@@ -131,43 +132,49 @@ function _oe_run() {
             oinit $url
             ;;
         11)
+            echo "  → git oreinit"
+            local msg; msg=$(_oe_ask_message "Commit message (Enter để dùng ReInitGit-YYYYMMDD):")
+            echo ""
+            oreinit $msg
+            ;;
+        12)
             echo "  → git oconfig"
             echo ""
             oconfig
             ;;
-        12)
+        13)
             echo "  → git oconfigclean"
             echo ""
             oconfigclean
             ;;
-        13)
+        14)
             echo "  → git ocreateremote"
             echo ""
             ocreateremote
             ;;
-        14)
+        15)
             echo "  → git addfile packagejson"
             echo ""
             addfile packagejson
             ;;
-        15)
+        16)
             echo "  → git addfile omessage"
             echo ""
             addfile omessage
             ;;
-        16)
+        17)
             echo "  → git addfile ogitignore"
             echo ""
             addfile ogitignore
             ;;
-        17)
+        18)
             echo "  → git oclone"
             local dest
             read -r -p "  Thư mục đích (Enter để dùng tên repo): " dest
             echo ""
             oclone $dest
             ;;
-        18)
+        19)
             echo "  → git ozip"
             echo ""
             ozip
@@ -195,12 +202,12 @@ function oexecute() {
     while true; do
         _oe_print_menu
 
-        read -r -p "  Chọn số thứ tự [0-18]: " choice
+        read -r -p "  Chọn số thứ tự [0-19]: " choice
 
         # Validate input
-        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 18 )); then
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 19 )); then
             echo ""
-            echo "  ⚠ Nhập số từ 0 đến 18."
+            echo "  ⚠ Nhập số từ 0 đến 19."
             sleep 1
             continue
         fi
