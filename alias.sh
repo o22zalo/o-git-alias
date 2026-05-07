@@ -103,19 +103,40 @@ function o() {
 # ---------------------------------------------------------------------------
 function oconfig() {
     local git_config=".git/config"
+
     if [[ ! -f "$git_config" ]]; then
         echo "[oconfig] ERROR: Khong tim thay $git_config" >&2
-        echo "[oconfig]   Hay chay lenh nay trong thu muc chua repo git." >&2
         return 1
     fi
-    if command -v code &>/dev/null; then
-        code "$git_config"
-    else
-        echo "[oconfig] ERROR: Khong tim thay lenh 'code' trong PATH." >&2
-        echo "[oconfig]   Cai VSCode: https://code.visualstudio.com/" >&2
-        echo "[oconfig]   Mo thu cong: $git_config" >&2
+
+    # Tìm VSCode executable thật
+    local _code_bin=""
+
+    # Windows VSCode official install locations
+    local candidates=(
+        "/c/Users/$USERNAME/AppData/Local/Programs/Microsoft VS Code/bin/code.cmd"
+        "/c/Program Files/Microsoft VS Code/bin/code.cmd"
+        "/c/Program Files (x86)/Microsoft VS Code/bin/code.cmd"
+    )
+
+    for c in "${candidates[@]}"; do
+        if [[ -f "$c" ]]; then
+            _code_bin="$c"
+            break
+        fi
+    done
+
+    # fallback
+    if [[ -z "$_code_bin" ]]; then
+        _code_bin="$(which code.cmd 2>/dev/null)"
+    fi
+
+    if [[ -z "$_code_bin" ]]; then
+        echo "[oconfig] ERROR: Khong tim thay VSCode" >&2
         return 1
     fi
+
+    "$_code_bin" "$git_config"
 }
 
 # ---------------------------------------------------------------------------
