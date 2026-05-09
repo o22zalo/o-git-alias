@@ -1,5 +1,74 @@
 # USER_CHANGELOG — nodecli / ocli
 
+## 2026-05-09 — Thêm subcommand `ocli npm` — quét & chạy npm scripts (+ .bat / .cmd)
+
+**Loại:** Feature
+
+### Những gì đã thêm
+
+**`services/npm/index.js`** (file mới):
+
+- Quét đệ quy toàn bộ cây thư mục (từ `cwd`, độ sâu tối đa 5 cấp) để tìm tất cả `package.json`
+- Tự động bỏ qua thư mục `node_modules`, `.git`, `dist`, `build`, `.next`, `.cache`, v.v.
+- Parse `scripts` từ từng `package.json`, hiển thị grouped theo đường dẫn file và `name/version` của package
+- Sắp xếp: `package.json` ở root trước, sau đó theo alphabet
+- Menu grouped với header rõ ràng mỗi nhóm (`📦 path/package.json  (tên-package v1.0.0)`)
+- Chọn số → chạy lệnh ngay với `stdio: inherit` (output hiện thẳng ra terminal, màu sắc giữ nguyên)
+- Sau mỗi lần chạy hiển thị exit code và hỏi có chạy tiếp không (vòng lặp)
+- Hỗ trợ args:
+  - `--bat` : quét thêm file `.bat`, hiển thị nhóm `🔧 .bat files`
+  - `--cmd` : quét thêm file `.cmd`, hiển thị nhóm `🔧 .cmd files`
+- Gợi ý thêm args nếu user chưa dùng
+
+**`bin/ocli.js`** (cập nhật):
+
+- Thêm subcommand `npm` vào `SUBCOMMANDS`, truyền `args` để hỗ trợ `--bat`, `--cmd`
+- Cập nhật `printHelp()` với mô tả subcommand và args
+
+**`package.json`:** bump version `1.7.0` → `1.8.0`
+
+### Cách dùng
+
+```bash
+# Quét npm scripts trong cwd và tất cả thư mục con
+ocli npm
+
+# Quét thêm file .bat
+ocli npm --bat
+
+# Quét thêm cả .bat lẫn .cmd
+ocli npm --bat --cmd
+```
+
+### Ví dụ menu
+
+```
+  ┌──────────────────────────────────────────────────────────────────────────
+  │  Chọn lệnh để chạy
+  ├──────────────────────────────────────────────────────────────────────────
+  │
+  │  📦 package.json  (my-app 2.1.0)
+  │  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  │    [ 1]  dev                    next dev
+  │    [ 2]  build                  next build
+  │    [ 3]  start                  next start
+  │    [ 4]  lint                   next lint
+  │
+  │  📦 packages/ui/package.json  (ui 1.0.0)
+  │  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  │    [ 5]  build                  tsc --project tsconfig.build.json
+  │    [ 6]  dev                    tsc --watch
+  │
+  │  🔧 .bat files
+  │  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  │    [ 7]  deploy.bat             scripts/deploy.bat
+  │
+  │    [ 0]  Thoát
+  └──────────────────────────────────────────────────────────────────────────
+```
+
+---
+
 ## 2026-04-16 — Thêm nghiệp vụ GitHub Actions vào `ocli gh`
 
 **Loại:** Feature
@@ -72,12 +141,6 @@
 **`nodecli/.supabase-o-config.example`:**
 
 - Mẫu config với format: `email`, `accessToken`, `accessTokenExp`, `defaultPassword`, `defaultOrgId`
-
-**Biến môi trường SUPABASE\_\* hỗ trợ:**
-
-- `SUPABASE_EMAIL`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_ACCESS_TOKEN_EXP`
-- `SUPABASE_PROJECT_NAME`, `SUPABASE_BUCKET_NAME`, `SUPABASE_DB_PASSWORD`
-- `SUPABASE_ORG_ID`, `SUPABASE_PROJECT_REF` (skip tạo project), `SUPABASE_REGION`
 
 **`bin/ocli.js`:** đăng ký subcommand `supabase` và giữ nguyên help cloudflared, bổ sung help supabase
 **`package.json`:** bump version `1.5.0` → `1.6.0`
@@ -256,12 +319,6 @@
   - `workflowManageDns()` — wizard chọn tunnel → đọc hostnames từ env hoặc nhập tay → upsert CNAME → in tổng kết + gợi ý xử lý lỗi
 - `workflowCreateWithOutput()` — sau khi xuất file, hỏi có muốn tạo DNS records ngay không
 - Menu tunnels thêm option: `"Tạo / cập nhật DNS records (CNAME) cho tunnel"`
-
-**`nodecli/.cloudflared-o-config.example`:**
-
-- Thêm ghi chú `accountid` là tùy chọn
-- Thêm ví dụ account không có accountid
-- Thêm mục "BIẾN MÔI TRƯỜNG HỖ TRỢ" với format .env đầy đủ
 
 **Docs:**
 
