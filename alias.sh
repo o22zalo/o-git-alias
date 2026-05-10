@@ -89,6 +89,7 @@ function o() {
     echo "    Muốn tạo package.json: git addfile packagejson"
     echo "    Sau đó dùng: npm run git-addfile-packagejson | npm run git-opushforce | npm run git-oaddcommit"
     echo "    npm scripts chỉ dùng tên đầy đủ, không dùng alias viết tắt"
+    echo "  git odeletebranch     git odb    liệt kê và xóa remote branch"
     echo ""
     echo "  Config auth: $O_CONFIG_FILE"
     echo ""
