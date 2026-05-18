@@ -11,22 +11,31 @@
 //   ocli npm --bat
 //   ocli npm --bat --cmd
 
-'use strict';
+"use strict";
 
-const fs              = require('fs');
-const path            = require('path');
-const { spawnSync }   = require('child_process');
-const { ask, confirm } = require('../../lib/prompt');
+const fs = require("fs");
+const path = require("path");
+const { spawnSync } = require("child_process");
+const { ask, confirm } = require("../../lib/prompt");
 
-const LOG       = '[npm]';
+const LOG = "[npm]";
 const MAX_DEPTH = 5;
 
 // Thư mục bỏ qua khi quét — tránh quét sâu vào output/cache
 const SKIP_DIRS = new Set([
-  'node_modules', '.git', '.next', '.nuxt',
-  'dist', 'build', 'out', 'coverage',
-  '.cache', '.turbo', '.parcel-cache',
-  '__pycache__', '.venv',
+  "node_modules",
+  ".git",
+  ".next",
+  ".nuxt",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  ".cache",
+  ".turbo",
+  ".parcel-cache",
+  "__pycache__",
+  ".venv",
 ]);
 
 // ─────────────────────────────────────────────────────────────────
@@ -69,15 +78,15 @@ function scanFiles(rootDir, matchFn) {
  */
 function parsePackageScripts(filePath) {
   try {
-    const raw = fs.readFileSync(filePath, 'utf8');
+    const raw = fs.readFileSync(filePath, "utf8");
     const pkg = JSON.parse(raw);
     return {
-      name:    pkg.name || '',
-      version: pkg.version || '',
+      name: pkg.name || "",
+      version: pkg.version || "",
       entries: Object.entries(pkg.scripts || {}),
     };
   } catch {
-    return { name: '', version: '', entries: [] };
+    return { name: "", version: "", entries: [] };
   }
 }
 
@@ -105,7 +114,7 @@ function buildItems(cwd, includeBat, includeCmd) {
   const items = [];
 
   // ── npm scripts từ tất cả package.json ───────────────────────────
-  const pkgFiles = scanFiles(cwd, (n) => n === 'package.json');
+  const pkgFiles = scanFiles(cwd, (n) => n === "package.json");
   // Sắp xếp: package.json ở root trước, rồi theo thứ tự alphabet
   pkgFiles.sort((a, b) => {
     const aDepth = path.relative(cwd, a).split(path.sep).length;
@@ -115,22 +124,22 @@ function buildItems(cwd, includeBat, includeCmd) {
   });
 
   for (const pkgFile of pkgFiles) {
-    const rel    = path.relative(cwd, pkgFile) || 'package.json';
+    const rel = path.relative(cwd, pkgFile) || "package.json";
     const pkgDir = path.dirname(pkgFile);
     const { name, version, entries } = parsePackageScripts(pkgFile);
     if (entries.length === 0) continue;
 
     let groupLabel = `📦 ${rel}`;
-    if (name) groupLabel += `  (${name}${version ? ' ' + version : ''})`;
+    if (name) groupLabel += `  (${name}${version ? " " + version : ""})`;
 
     for (const [scriptName, scriptCmd] of entries) {
       items.push({
-        type:        'npm',
-        group:       groupLabel,
-        groupKey:    pkgFile,
+        type: "npm",
+        group: groupLabel,
+        groupKey: pkgFile,
         displayName: scriptName,
-        displayCmd:  scriptCmd,
-        runDir:      pkgDir,
+        displayCmd: scriptCmd,
+        runDir: pkgDir,
         scriptName,
         scriptCmd,
       });
@@ -139,38 +148,38 @@ function buildItems(cwd, includeBat, includeCmd) {
 
   // ── .bat files ────────────────────────────────────────────────────
   if (includeBat) {
-    const batFiles = scanFiles(cwd, (n) => n.toLowerCase().endsWith('.bat'));
+    const batFiles = scanFiles(cwd, (n) => n.toLowerCase().endsWith(".bat"));
     batFiles.sort();
     for (const batFile of batFiles) {
       const rel = path.relative(cwd, batFile);
       items.push({
-        type:        'bat',
-        group:       '🔧 .bat files',
-        groupKey:    '__bat__',
+        type: "bat",
+        group: "🔧 .bat files",
+        groupKey: "__bat__",
         displayName: path.basename(batFile),
-        displayCmd:  rel,
-        runDir:      path.dirname(batFile),
-        scriptName:  path.basename(batFile),
-        scriptCmd:   batFile,
+        displayCmd: rel,
+        runDir: path.dirname(batFile),
+        scriptName: path.basename(batFile),
+        scriptCmd: batFile,
       });
     }
   }
 
   // ── .cmd files ────────────────────────────────────────────────────
   if (includeCmd) {
-    const cmdFiles = scanFiles(cwd, (n) => n.toLowerCase().endsWith('.cmd'));
+    const cmdFiles = scanFiles(cwd, (n) => n.toLowerCase().endsWith(".cmd"));
     cmdFiles.sort();
     for (const cmdFile of cmdFiles) {
       const rel = path.relative(cwd, cmdFile);
       items.push({
-        type:        'cmd',
-        group:       '🔧 .cmd files',
-        groupKey:    '__cmd__',
+        type: "cmd",
+        group: "🔧 .cmd files",
+        groupKey: "__cmd__",
         displayName: path.basename(cmdFile),
-        displayCmd:  rel,
-        runDir:      path.dirname(cmdFile),
-        scriptName:  path.basename(cmdFile),
-        scriptCmd:   cmdFile,
+        displayCmd: rel,
+        runDir: path.dirname(cmdFile),
+        scriptName: path.basename(cmdFile),
+        scriptCmd: cmdFile,
       });
     }
   }
@@ -191,7 +200,7 @@ const MENU_WIDTH = 74;
 function printGroupedMenu(items) {
   // Gom nhóm giữ thứ tự xuất hiện
   const groupOrder = [];
-  const groupMap   = new Map(); // groupKey → { label, items[] }
+  const groupMap = new Map(); // groupKey → { label, items[] }
 
   for (const item of items) {
     if (!groupMap.has(item.groupKey)) {
@@ -201,31 +210,27 @@ function printGroupedMenu(items) {
     groupMap.get(item.groupKey).items.push(item);
   }
 
-  console.log('');
-  console.log(`  ┌${'─'.repeat(MENU_WIDTH)}`);
-  console.log('  │  Chọn lệnh để chạy');
-  console.log(`  ├${'─'.repeat(MENU_WIDTH)}`);
+  console.log("");
+  console.log(`  ┌${"─".repeat(MENU_WIDTH)}`);
+  console.log("  │  Chọn lệnh để chạy");
+  console.log(`  ├${"─".repeat(MENU_WIDTH)}`);
 
   let idx = 1;
   for (const key of groupOrder) {
     const { label, items: groupItems } = groupMap.get(key);
-    console.log('  │');
+    console.log("  │");
     console.log(`  │  ${label}`);
-    console.log(`  │  ${'╌'.repeat(MENU_WIDTH - 2)}`);
+    console.log(`  │  ${"╌".repeat(MENU_WIDTH - 2)}`);
 
     for (const item of groupItems) {
       item._menuIdx = idx;
 
       // Cột tên: 22 ký tự
-      const nameCol = item.displayName.length > 22
-        ? item.displayName.slice(0, 20) + '..'
-        : item.displayName.padEnd(22);
+      const nameCol = item.displayName.length > 22 ? item.displayName.slice(0, 20) + ".." : item.displayName.padEnd(22);
 
       // Cột command preview: phần còn lại
       const maxCmdLen = MENU_WIDTH - 10 - 22;
-      const cmdPreview = item.displayCmd.length > maxCmdLen
-        ? item.displayCmd.slice(0, maxCmdLen - 3) + '...'
-        : item.displayCmd;
+      const cmdPreview = item.displayCmd.length > maxCmdLen ? item.displayCmd.slice(0, maxCmdLen - 3) + "..." : item.displayCmd;
 
       const idxStr = String(idx).padStart(2);
       console.log(`  │    [${idxStr}]  ${nameCol}  ${cmdPreview}`);
@@ -233,10 +238,10 @@ function printGroupedMenu(items) {
     }
   }
 
-  console.log('  │');
-  console.log('  │    [ 0]  Thoát');
-  console.log(`  └${'─'.repeat(MENU_WIDTH)}`);
-  console.log('');
+  console.log("  │");
+  console.log("  │    [ 0]  Thoát");
+  console.log(`  └${"─".repeat(MENU_WIDTH)}`);
+  console.log("");
 
   return items.length;
 }
@@ -250,7 +255,7 @@ async function askChoice(items) {
   while (true) {
     const ans = await ask(`  Chọn [0-${max}]`);
     const trimmed = ans.trim();
-    if (trimmed === '0' || trimmed === '') return null;
+    if (trimmed === "0" || trimmed === "") return null;
     const n = parseInt(trimmed, 10);
     if (!isNaN(n) && n >= 1 && n <= max) {
       // Tìm item với _menuIdx tương ứng
@@ -267,38 +272,39 @@ async function askChoice(items) {
 function executeItem(item) {
   let cmd, cmdArgs;
 
-  if (item.type === 'npm') {
-    // npm run <script> — dùng shell: true để tương thích npm.cmd trên Windows
-    cmd     = 'npm';
-    cmdArgs = ['run', item.scriptName];
+  if (item.type === "npm") {
+    // npm run <script> — dùng shell: true để tương thích npm.cmd trên Windows.
+    // Bọc scriptName trong dấu nháy kép để tránh shell tách tên có dấu cách
+    // hoặc ký tự đặc biệt (emoji, v.v.) thành nhiều token.
+    const escaped = item.scriptName.replace(/"/g, '\\"');
+    cmd = `npm run "${escaped}"`;
+    cmdArgs = [];
   } else {
     // .bat / .cmd — chỉ chạy trên Windows
-    if (process.platform !== 'win32') {
+    if (process.platform !== "win32") {
       console.log(`${LOG} ⚠  File ${item.type.toUpperCase()} chỉ chạy được trên Windows.`);
       return;
     }
-    cmd     = 'cmd';
-    cmdArgs = ['/c', item.scriptCmd];
+    cmd = "cmd";
+    cmdArgs = ["/c", item.scriptCmd];
   }
 
-  const runLabel = item.type === 'npm'
-    ? `npm run ${item.scriptName}`
-    : item.displayCmd;
+  const runLabel = item.type === "npm" ? `npm run ${item.scriptName}` : item.displayCmd;
 
-  const relDir = path.relative(process.cwd(), item.runDir) || '.';
+  const relDir = path.relative(process.cwd(), item.runDir) || ".";
 
   console.log(`\n${LOG} Lệnh    : ${runLabel}`);
   console.log(`${LOG} Thư mục : ${relDir}`);
-  console.log(`\n${'─'.repeat(60)}\n`);
+  console.log(`\n${"─".repeat(60)}\n`);
 
   const result = spawnSync(cmd, cmdArgs, {
-    stdio:  'inherit',    // output thẳng ra terminal — không buffer
-    cwd:    item.runDir,
-    shell:  true,         // cho phép tìm npm.cmd, cmd.exe cross-platform
-    env:    process.env,
+    stdio: "inherit", // output thẳng ra terminal — không buffer
+    cwd: item.runDir,
+    shell: true, // cho phép tìm npm.cmd, cmd.exe cross-platform
+    env: process.env,
   });
 
-  console.log(`\n${'─'.repeat(60)}`);
+  console.log(`\n${"─".repeat(60)}`);
 
   const exitCode = result.status ?? (result.error ? 1 : 0);
   if (exitCode === 0) {
@@ -317,24 +323,24 @@ function executeItem(item) {
 // ─────────────────────────────────────────────────────────────────
 
 function printScanSummary(items, cwd, includeBat, includeCmd) {
-  const pkgKeys   = new Set(items.filter((i) => i.type === 'npm').map((i) => i.groupKey));
-  const npmCount  = items.filter((i) => i.type === 'npm').length;
-  const batCount  = items.filter((i) => i.type === 'bat').length;
-  const cmdCount  = items.filter((i) => i.type === 'cmd').length;
+  const pkgKeys = new Set(items.filter((i) => i.type === "npm").map((i) => i.groupKey));
+  const npmCount = items.filter((i) => i.type === "npm").length;
+  const batCount = items.filter((i) => i.type === "bat").length;
+  const cmdCount = items.filter((i) => i.type === "cmd").length;
 
   const parts = [];
   if (pkgKeys.size > 0) parts.push(`${pkgKeys.size} package.json (${npmCount} script)`);
-  if (batCount > 0)     parts.push(`${batCount} file .bat`);
-  if (cmdCount > 0)     parts.push(`${cmdCount} file .cmd`);
+  if (batCount > 0) parts.push(`${batCount} file .bat`);
+  if (cmdCount > 0) parts.push(`${cmdCount} file .cmd`);
 
-  console.log(`${LOG} Tìm thấy: ${parts.join('  │  ')}`);
+  console.log(`${LOG} Tìm thấy: ${parts.join("  │  ")}`);
 
   if (!includeBat || !includeCmd) {
     const hints = [];
-    if (!includeBat) hints.push('--bat');
-    if (!includeCmd) hints.push('--cmd');
+    if (!includeBat) hints.push("--bat");
+    if (!includeCmd) hints.push("--cmd");
     if (hints.length > 0) {
-      console.log(`${LOG} Gợi ý: thêm ${hints.join(' ')} để quét thêm loại file đó`);
+      console.log(`${LOG} Gợi ý: thêm ${hints.join(" ")} để quét thêm loại file đó`);
     }
   }
 }
@@ -344,9 +350,9 @@ function printScanSummary(items, cwd, includeBat, includeCmd) {
 // ─────────────────────────────────────────────────────────────────
 
 async function run(args = []) {
-  const includeBat = args.includes('--bat') || args.includes('-bat');
-  const includeCmd = args.includes('--cmd') || args.includes('-cmd');
-  const cwd        = process.cwd();
+  const includeBat = args.includes("--bat") || args.includes("-bat");
+  const includeCmd = args.includes("--cmd") || args.includes("-cmd");
+  const cwd = process.cwd();
 
   console.log(`\n${LOG} Đang quét: ${cwd}`);
 
@@ -371,8 +377,8 @@ async function run(args = []) {
 
     executeItem(chosen);
 
-    console.log('');
-    const cont = await confirm('  Chạy tiếp lệnh khác?', true);
+    console.log("");
+    const cont = await confirm("  Chạy tiếp lệnh khác?", true);
     if (!cont) break;
   }
 }
