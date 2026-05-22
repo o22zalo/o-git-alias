@@ -46,6 +46,8 @@
 #   git config --global alias.ori            "!source \"$SCRIPT\" && oreinit"
 #   git config --global alias.odeletebranch  "!source \"$SCRIPT\" && odeletebranch"
 #   git config --global alias.odb            "!source \"$SCRIPT\" && odeletebranch"
+#   git config --global alias.oaddconfig     "!source \"$SCRIPT\" && oaddconfig"
+#   git config --global alias.oadc           "!source \"$SCRIPT\" && oaddconfig"
 #
 # =============================================================================
 
@@ -87,6 +89,7 @@ function o() {
     echo "    addfile omessage               tạo .opushforce.message"
     echo "    addfile ogitignore             tạo / cập nhật .gitignore"
     echo "  git odeletebranch     git odb    liệt kê và xóa remote branch"
+    echo "  git oaddconfig        git oadc   thêm GitHub token vào .git-o-config"
     echo ""
     echo "  Windows npm scripts:"
     echo "    Muốn tạo package.json: git addfile packagejson"
@@ -586,6 +589,9 @@ _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
     
 [[ -f "${_O_MODULES_DIR}/odeletebranch.sh" ]] \
     && source "${_O_MODULES_DIR}/odeletebranch.sh"
+
+[[ -f "${_O_MODULES_DIR}/oaddconfig.sh" ]] \
+    && source "${_O_MODULES_DIR}/oaddconfig.sh"
 
 # =============================================================================
 # (Thêm module mới phía dưới theo cùng pattern)

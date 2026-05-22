@@ -53,6 +53,7 @@ $Aliases = @(
     @("addfile", "addfile"),
     @("ozip", "ozip"),
     @("odeletebranch", "odeletebranch"),
+    @("oaddconfig", "oaddconfig"),
     # Viết tắt (trỏ cùng hàm)
     @("oe", "oexecute"),
     @("oac", "oaddcommit"),
@@ -72,7 +73,8 @@ $Aliases = @(
     @("ocr", "ocreateremote"),
     @("af", "addfile"),
     @("oz", "ozip"),
-    @("odb", "odeletebranch")
+    @("odb", "odeletebranch"),
+    @("oadc", "oaddconfig")
 )
 $Count = 0
 
@@ -114,7 +116,7 @@ Write-Host "  git opullpush        git opp"
 Write-Host "  git ostash           git ost"
 Write-Host "  git ofetch           git oft"
 Write-Host "  git oinit            git oi    ← git init + file helper mac dinh"
-Write-Host "  git oreinit [msg]    git ori   ← MOI: xoa history, giu config, init lai"
+Write-Host "  git oreinit [msg]    git ori   ← xoa history, giu config, init lai"
 Write-Host "  git oconfig          git oc"
 Write-Host "  git oconfigclean     git occ"
 Write-Host "  git ocreateremote    git ocr"
@@ -123,6 +125,7 @@ Write-Host "    addfile omessage"
 Write-Host "    addfile ogitignore"
 Write-Host "  git ozip             git oz    ← download source ZIP"
 Write-Host "  git odeletebranch    git odb   ← xoa remote branch"
+Write-Host "  git oaddconfig       git oadc  ← MOI: them GitHub token vao .git-o-config"
 Write-Host ""
 Write-Host " Kiem tra : git config --global --list"
 Write-Host " Thu ngay : git oe"

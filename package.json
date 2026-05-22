@@ -21,6 +21,7 @@
     "git-addfile": "powershell -NoProfile -Command \"Start-Process -FilePath cmd.exe -WorkingDirectory '%CD%' -ArgumentList '/k', 'git addfile'\"",
     "git-addfile-packagejson": "powershell -NoProfile -Command \"Start-Process -FilePath cmd.exe -WorkingDirectory '%CD%' -ArgumentList '/k', 'git addfile packagejson'\"",
     "git-addfile-omessage": "powershell -NoProfile -Command \"Start-Process -FilePath cmd.exe -WorkingDirectory '%CD%' -ArgumentList '/k', 'git addfile omessage'\"",
-    "git-addfile-ogitignore": "powershell -NoProfile -Command \"Start-Process -FilePath cmd.exe -WorkingDirectory '%CD%' -ArgumentList '/k', 'git addfile ogitignore'\""
+    "git-addfile-ogitignore": "powershell -NoProfile -Command \"Start-Process -FilePath cmd.exe -WorkingDirectory '%CD%' -ArgumentList '/k', 'git addfile ogitignore'\"",
+    "git-oaddconfig": "powershell -NoProfile -Command \"Start-Process -FilePath cmd.exe -WorkingDirectory '%CD%' -ArgumentList '/k', 'git oaddconfig'\""
   }
 }
