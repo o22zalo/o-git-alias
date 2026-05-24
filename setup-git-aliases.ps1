@@ -74,7 +74,8 @@ $Aliases = @(
     @("af", "addfile"),
     @("oz", "ozip"),
     @("odb", "odeletebranch"),
-    @("oadc", "oaddconfig")
+    @("oadc", "oaddconfig"),
+    @("getremoteurl", "get_remote_url")
 )
 $Count = 0
 
