@@ -128,6 +128,100 @@ function _saveAccountIdToConfig(label, accountId) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Thêm cấu hình mới vào .cloudflared-o-config
+// ─────────────────────────────────────────────────────────────────
+
+function _addNewAccountToConfig(label, email, apikey, accountid) {
+  const { resolveCloudflaredConfigPath } = require("../../lib/cloudflaredApi");
+  const fs = require("fs");
+  const path = require("path");
+
+  let cfgPath = resolveCloudflaredConfigPath();
+  if (!cfgPath) {
+    const nodeCliDir = path.resolve(__dirname, "..", "..");
+    cfgPath = path.join(nodeCliDir, ".cloudflared-o-config");
+  }
+
+  let raw = "";
+  if (fs.existsSync(cfgPath)) {
+    raw = fs.readFileSync(cfgPath, "utf8");
+  }
+
+  let content = raw;
+  if (content && !content.endsWith("\n")) {
+    content += "\n";
+  }
+  if (content && !content.endsWith("\n\n") && content.length > 0) {
+    content += "\n";
+  }
+
+  content += `[${label}]\n`;
+  content += `email=${email}\n`;
+  content += `apikey=${apikey}\n`;
+  content += `ca_apikey=\n`;
+  content += `accountid=${accountid || ""}\n`;
+
+  fs.writeFileSync(cfgPath, content, "utf8");
+  console.log(`${LOG} ✓ Đã thêm cấu hình mới vào config: ${cfgPath}`);
+}
+
+async function addNewCloudflareConfig() {
+  console.log(`\n${LOG} ─── Thêm Cấu Hình Cloudflare Mới ───`);
+  const email = await ask("  Nhập Email Cloudflare");
+  if (!email || !email.trim()) {
+    console.log("  Hủy bỏ: Email không được trống.");
+    return;
+  }
+
+  const apikey = await ask("  Nhập API Key (Global API Key)");
+  if (!apikey || !apikey.trim()) {
+    console.log("  Hủy bỏ: API Key không được trống.");
+    return;
+  }
+
+  const label = await ask("  Nhập Label cho cấu hình này (hoặc Enter để lấy Email làm Label)", email.trim());
+  
+  let accountid = await ask("  Nhập Account ID (bỏ trống để tự động tải danh sách từ API)");
+  accountid = accountid.trim();
+
+  if (!accountid) {
+    console.log(`\n${LOG} Đang tải danh sách Account từ Cloudflare API...`);
+    const tempAccount = { email: email.trim(), apikey: apikey.trim() };
+    let cfAccounts = [];
+    try {
+      cfAccounts = await listCloudflareAccounts(tempAccount);
+    } catch (e) {
+      console.error(`${LOG} Lỗi khi lấy danh sách account: ${e.message}`);
+    }
+
+    if (cfAccounts.length === 0) {
+      console.log(`${LOG} Không tự động lấy được accounts qua API. Vui lòng nhập thủ công.`);
+      const manual = await ask("  Nhập Account ID thủ công (hoặc Enter để bỏ trống)");
+      accountid = manual.trim();
+    } else if (cfAccounts.length === 1) {
+      console.log(`${LOG} Phát hiện 1 account: ${cfAccounts[0].name} (${cfAccounts[0].id})`);
+      const ok = await confirm(`  Dùng account này?`, true);
+      if (ok) {
+        accountid = cfAccounts[0].id;
+      }
+    } else {
+      const idx = await selectMenu(
+        "Chọn Cloudflare Account",
+        cfAccounts.map((a) => ({
+          label: `${a.name.padEnd(40)} ${a.id}  [${a.type}]`,
+        })),
+      );
+      if (idx !== -1) {
+        accountid = cfAccounts[idx].id;
+        console.log(`${LOG} Đã chọn account: ${cfAccounts[idx].name} (${accountid})`);
+      }
+    }
+  }
+
+  _addNewAccountToConfig(label.trim(), email.trim(), apikey.trim(), accountid);
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Hiển thị các biến CLOUDFLARED_* có sẵn trong process.env
 // ─────────────────────────────────────────────────────────────────
 
@@ -172,26 +266,34 @@ async function run() {
   const { vars: envVars } = loadCloudflaredEnv();
 
   // ── Load + chọn account ────────────────────────────────────────────
-  let sections;
+  let sections = [];
   try {
     const cfg = loadCloudflaredSections();
     sections = cfg.sections;
   } catch (e) {
-    console.error(e.message);
-    process.exit(1);
+    console.warn(`${LOG} Chưa tìm thấy file cấu hình hoặc cấu hình lỗi: ${e.message}`);
   }
 
   if (sections.length === 0) {
-    console.error(`${LOG} Không tìm thấy account nào trong .cloudflared-o-config.`);
-    console.error(`${LOG}   Tạo file:`);
-    console.error(`${LOG}   cp nodecli/.cloudflared-o-config.example nodecli/.cloudflared-o-config`);
+    const addNow = await confirm("Bạn có muốn thêm cấu hình Cloudflare mới ngay bây giờ không?", true);
+    if (addNow) {
+      await addNewCloudflareConfig();
+      await run();
+      return;
+    }
     process.exit(1);
   }
 
   // Validate có email + apikey
   const valid = sections.filter((s) => s.email && s.apikey);
   if (valid.length === 0) {
-    console.error(`${LOG} Các account trong .cloudflared-o-config đều thiếu email/apikey.`);
+    console.warn(`${LOG} Không tìm thấy cấu hình hợp lệ (có đủ email và apikey) trong .cloudflared-o-config.`);
+    const addNow = await confirm("Bạn có muốn thêm cấu hình Cloudflare mới không?", true);
+    if (addNow) {
+      await addNewCloudflareConfig();
+      await run();
+      return;
+    }
     process.exit(1);
   }
 
@@ -199,13 +301,22 @@ async function run() {
     console.warn(`${LOG} Bỏ qua ${sections.length - valid.length} account(s) thiếu thông tin.`);
   }
 
+  const menuItems = valid.map((s) => ({
+    label: `${s.label.padEnd(20)}  ${s.email.padEnd(35)}  ${s.accountid ? `accountid: ${s.accountid}` : "(accountid chưa cấu hình)"}`,
+  }));
+  menuItems.push({ label: "[+] Thêm cấu hình mới" });
+
   const accountIdx = await selectMenu(
     "Chọn Cloudflare account",
-    valid.map((s) => ({
-      label: `${s.label.padEnd(20)}  ${s.email.padEnd(35)}  ${s.accountid ? `accountid: ${s.accountid}` : "(accountid chưa cấu hình)"}`,
-    })),
+    menuItems,
   );
   if (accountIdx === -1) return;
+
+  if (accountIdx === valid.length) {
+    await addNewCloudflareConfig();
+    await run();
+    return;
+  }
 
   const account = { ...valid[accountIdx] };
   console.log(`\n${LOG} Account: ${account.label} (${account.email})`);
