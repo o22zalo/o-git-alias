@@ -181,26 +181,46 @@ function _o_save_result() {
     local resp="$1" detected_url="$2" fallback_url="$3"
 
     if [[ -n "$detected_url" ]]; then
-        local slot
-        slot=$(_o_next_url_slot)
         echo ""
         echo "  ✓ Tạo repo thành công!"
         echo "  ✓ Clone URL : $detected_url"
-        if [[ -n "$slot" ]]; then
-            git config "$slot" "$detected_url"
-            echo "  ✓ Đã lưu   : $slot  →  $detected_url"
+
+        # ── Kiểm tra .git/config còn placeholder "oremoteUrl" không ──────
+        local git_config
+        git_config="$(git rev-parse --git-dir 2>/dev/null)/config"
+        local current_o_url
+        current_o_url=$(git config --get o.url 2>/dev/null || true)
+
+        if [[ "$current_o_url" == "oremoteUrl" ]]; then
+            # Thay thế placeholder ở cả 2 vị trí: [o] url và [remote "origin"] url
+            sed -i "s|url = oremoteUrl|url = ${detected_url}|g" "$git_config"
+            echo "  ✓ Đã thay thế oremoteUrl → $detected_url  (2 vị trí trong .git/config)"
             echo "  → Mở .git/config: git oconfig"
             if ! git oconfig; then
                 echo "  WARN: Không mở được .git/config bằng 'git oconfig'. Bạn có thể mở thủ công bằng: git oconfig" >&2
             fi
             echo ""
-            if [[ "$slot" == "o.url" ]]; then
-                echo "  Bước tiếp: git opush"
-            else
-                echo "  Bước tiếp: git opushforce   (push tất cả remote)"
-            fi
+            echo "  Bước tiếp: git opush"
         else
-            echo "  ⚠ Hết slot (o.url~o.url9). Set thủ công nếu cần." >&2
+            # Logic hiện tại: tìm slot trống tiếp theo
+            local slot
+            slot=$(_o_next_url_slot)
+            if [[ -n "$slot" ]]; then
+                git config "$slot" "$detected_url"
+                echo "  ✓ Đã lưu   : $slot  →  $detected_url"
+                echo "  → Mở .git/config: git oconfig"
+                if ! git oconfig; then
+                    echo "  WARN: Không mở được .git/config bằng 'git oconfig'. Bạn có thể mở thủ công bằng: git oconfig" >&2
+                fi
+                echo ""
+                if [[ "$slot" == "o.url" ]]; then
+                    echo "  Bước tiếp: git opush"
+                else
+                    echo "  Bước tiếp: git opushforce   (push tất cả remote)"
+                fi
+            else
+                echo "  ⚠ Hết slot (o.url~o.url9). Set thủ công nếu cần." >&2
+            fi
         fi
         return 0
     else
