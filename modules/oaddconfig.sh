@@ -7,15 +7,101 @@
 #   O_CONFIG_FILE   — đường dẫn đến .git-o-config
 #
 # Flow:
-#   1. Nhập GitHub Personal Access Token (ẩn khi gõ)
-#   2. Verify token qua API → lấy username
-#   3. Fetch danh sách: bản thân (username) + tất cả org user thuộc về
-#   4. Hiện menu chọn org/account để gắn token
-#   5. Confirm → ghi [github.com/<owner>] + token= vào .git-o-config
+#   1. Đọc clipboard → nếu là GitHub PAT hợp lệ thì hỏi có dùng luôn không
+#   2. Nếu không dùng clipboard (hoặc không phát hiện PAT) → nhập token (ẩn khi gõ)
+#   3. Verify token qua API → lấy username
+#   4. Fetch danh sách: bản thân (username) + tất cả org user thuộc về
+#   5. Hiện menu chọn org/account để gắn token
+#   6. Confirm → ghi [github.com/<owner>] + token= vào .git-o-config
 # =============================================================================
 
 [[ -n "${_O_MODULE_ADDCONFIG_LOADED:-}" ]] && return 0
 _O_MODULE_ADDCONFIG_LOADED=1
+
+# ---------------------------------------------------------------------------
+# HELPER: Đọc clipboard — hỗ trợ Windows Git Bash, Linux, macOS
+# Output stdout: nội dung clipboard (1 dòng đầu tiên, đã trim)
+# Return: 0 nếu đọc được, 1 nếu không có công cụ
+# ---------------------------------------------------------------------------
+function _oac_read_clipboard() {
+    local content=""
+
+    # Windows Git Bash — dùng powershell.exe
+    if command -v powershell.exe &>/dev/null 2>&1; then
+        content=$(powershell.exe -NoProfile -NonInteractive \
+            -Command "Get-Clipboard" 2>/dev/null \
+            | head -1 \
+            | tr -d '\r\n')
+
+    # macOS
+    elif command -v pbpaste &>/dev/null 2>&1; then
+        content=$(pbpaste 2>/dev/null | head -1 | tr -d '\r\n')
+
+    # Linux — xclip
+    elif command -v xclip &>/dev/null 2>&1; then
+        content=$(xclip -selection clipboard -o 2>/dev/null | head -1 | tr -d '\r\n')
+
+    # Linux — xsel
+    elif command -v xsel &>/dev/null 2>&1; then
+        content=$(xsel --clipboard --output 2>/dev/null | head -1 | tr -d '\r\n')
+
+    else
+        return 1
+    fi
+
+    # Trim leading/trailing whitespace
+    content="${content#"${content%%[![:space:]]*}"}"
+    content="${content%"${content##*[![:space:]]}"}"
+
+    [[ -z "$content" ]] && return 1
+    echo "$content"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Kiểm tra chuỗi có phải GitHub PAT hợp lệ không
+#
+# Các prefix GitHub PAT đã biết:
+#   ghp_   — Personal Access Token (classic)
+#   github_pat_  — Fine-grained PAT
+#   gho_   — OAuth token
+#   ghs_   — GitHub App installation token
+#   ghr_   — Refresh token
+#
+# Return: 0 nếu hợp lệ, 1 nếu không
+# ---------------------------------------------------------------------------
+function _oac_is_github_pat() {
+    local token="$1"
+
+    # Độ dài tối thiểu 20 ký tự, chỉ chứa ký tự an toàn
+    (( ${#token} < 20 )) && return 1
+    [[ "$token" =~ [[:space:]] ]] && return 1
+
+    case "$token" in
+        ghp_*|gho_*|ghs_*|ghr_*|github_pat_*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# HELPER: Hiển thị token rút gọn để preview (không lộ token thật)
+# $1 = token
+# ---------------------------------------------------------------------------
+function _oac_token_preview() {
+    local token="$1"
+    local prefix="${token%%_*}_"
+    local rest="${token#*_}"
+    local show_len=6
+    local hidden_len=$(( ${#rest} - show_len ))
+    (( hidden_len < 0 )) && hidden_len=0
+    local stars
+    stars=$(printf '%*s' "$hidden_len" '' | tr ' ' '*')
+    echo "${prefix}${rest:0:$show_len}${stars}"
+}
 
 # ---------------------------------------------------------------------------
 # HELPER: Gọi GitHub API với Bearer token
@@ -125,6 +211,7 @@ function _oac_write_section() {
 # Cú pháp: git oaddconfig
 #
 # Wizard thêm GitHub token vào .git-o-config theo org/account.
+# Tự động phát hiện GitHub PAT trong clipboard khi khởi động.
 # =============================================================================
 function oaddconfig() {
     echo ""
@@ -134,22 +221,55 @@ function oaddconfig() {
     echo ""
 
     # ─────────────────────────────────────────────────────────────────────────
-    # BƯỚC 1 — Nhập token (ẩn khi gõ)
+    # BƯỚC 1 — Kiểm tra clipboard trước khi hỏi nhập tay
     # ─────────────────────────────────────────────────────────────────────────
-    echo "  Tạo PAT tại: https://github.com/settings/tokens"
-    echo "  Scope cần  : repo  (hoặc Fine-grained với quyền Contents + Metadata)"
-    echo ""
-
     local token=""
-    while true; do
-        read -r -s -p "  GitHub Token: " token
+    local clipboard_content=""
+
+    if clipboard_content=$(_oac_read_clipboard 2>/dev/null) \
+        && [[ -n "$clipboard_content" ]] \
+        && _oac_is_github_pat "$clipboard_content"; then
+
+        local preview
+        preview=$(_oac_token_preview "$clipboard_content")
+
+        echo "  🔍 Phát hiện GitHub PAT trong clipboard:"
         echo ""
-        [[ -n "$token" ]] && break
-        echo "  Token không được để trống."
-    done
+        printf "     Token  : %s\n" "$preview"
+        printf "     Độ dài : %d ký tự\n" "${#clipboard_content}"
+        echo ""
+
+        local use_clipboard
+        read -r -p "  Dùng token này? [Y/n]: " use_clipboard
+        use_clipboard="${use_clipboard:-Y}"
+
+        if [[ "${use_clipboard,,}" == "y" ]]; then
+            token="$clipboard_content"
+            echo "  ✓ Dùng token từ clipboard."
+        else
+            echo "  → Bỏ qua, vui lòng nhập token thủ công."
+        fi
+        echo ""
+    fi
 
     # ─────────────────────────────────────────────────────────────────────────
-    # BƯỚC 2 — Verify token → lấy username
+    # BƯỚC 2 — Nhập token thủ công nếu chưa có (ẩn khi gõ)
+    # ─────────────────────────────────────────────────────────────────────────
+    if [[ -z "$token" ]]; then
+        echo "  Tạo PAT tại: https://github.com/settings/tokens"
+        echo "  Scope cần  : repo  (hoặc Fine-grained với quyền Contents + Metadata)"
+        echo ""
+
+        while true; do
+            read -r -s -p "  GitHub Token: " token
+            echo ""
+            [[ -n "$token" ]] && break
+            echo "  Token không được để trống."
+        done
+    fi
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # BƯỚC 3 — Verify token → lấy username
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
     echo "  Đang xác thực token..."
@@ -174,7 +294,7 @@ function oaddconfig() {
     echo "  ✓ Xác thực thành công: $gh_login${gh_name:+ ($gh_name)}"
 
     # ─────────────────────────────────────────────────────────────────────────
-    # BƯỚC 3 — Fetch danh sách org user thuộc về
+    # BƯỚC 4 — Fetch danh sách org user thuộc về
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
     echo "  Đang tải danh sách org..."
@@ -188,7 +308,7 @@ function oaddconfig() {
     done < <(_oac_parse_login_list "$orgs_resp")
 
     # ─────────────────────────────────────────────────────────────────────────
-    # BƯỚC 4 — Hiện menu chọn: bản thân + các org
+    # BƯỚC 5 — Hiện menu chọn: bản thân + các org
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
     echo "  ┌──────────────────────────────────────────────────────────────"
@@ -225,10 +345,11 @@ function oaddconfig() {
     fi
 
     local section_key="github.com/${selected_owner}"
-    local token_preview="${token:0:8}***"
+    local token_preview
+    token_preview=$(_oac_token_preview "$token")
 
     # ─────────────────────────────────────────────────────────────────────────
-    # BƯỚC 5 — Confirm + ghi vào config
+    # BƯỚC 6 — Confirm + ghi vào config
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
     echo "  ┌─────────────────────────────────────────────────────────"
