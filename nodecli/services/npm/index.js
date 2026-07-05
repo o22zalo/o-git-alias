@@ -16,7 +16,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { ask, confirm } = require("../../lib/prompt");
+const { ask, confirm, confirmOrNumber } = require("../../lib/prompt");
 
 const LOG = "[npm]";
 const MAX_DEPTH = 5;
@@ -378,8 +378,17 @@ async function run(args = []) {
     executeItem(chosen);
 
     console.log("");
-    const cont = await confirm("  Chạy tiếp lệnh khác?", true);
-    if (!cont) break;
+    let cont = await confirmOrNumber("  Chạy tiếp lệnh khác?", items.length, true);
+    if (cont === false) break;
+
+    // Nếu user nhập số → chạy trực tiếp, sau đó hỏi tiếp (không quay lại menu)
+    while (typeof cont === "number") {
+      const item = items.find((it) => it._menuIdx === cont);
+      if (item) executeItem(item);
+      console.log("");
+      cont = await confirmOrNumber("  Chạy tiếp lệnh khác?", items.length, true);
+      if (cont === false) break;
+    }
   }
 }
 

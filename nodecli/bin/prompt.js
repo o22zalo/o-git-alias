@@ -30,6 +30,27 @@ async function confirm(question, defaultYes = true) {
 }
 
 /**
+ * Confirm y/n hoặc nhập số để chạy lệnh tiếp.
+ * Trả về:
+ *   true  — yes (tiếp tục vòng lặp)
+ *   false — no  (thoát)
+ *   number — số lệnh cần chạy tiếp (trực tiếp)
+ */
+async function confirmOrNumber(question, maxNum, defaultYes = true) {
+  const hint = defaultYes ? 'Y/n/số tiếp' : 'y/N/số tiếp';
+  while (true) {
+    const ans = await ask(`${question} [${hint}]`);
+    if (!ans) return defaultYes;
+    const trimmed = ans.trim();
+    const n = parseInt(trimmed, 10);
+    if (!isNaN(n) && n >= 1 && n <= maxNum) return n;
+    if (/^[yY]/.test(trimmed)) return true;
+    if (/^[nN]/.test(trimmed)) return false;
+    console.log(`  Nhập Y/n hoặc số từ 1 đến ${maxNum}.`);
+  }
+}
+
+/**
  * Hiển thị menu + hỏi chọn số.
  * items: [{ label: string }]
  * Trả về index (0-based) đã chọn.
@@ -98,4 +119,4 @@ function askMultiline(prompt) {
   });
 }
 
-module.exports = { ask, confirm, selectMenu, selectList, askFilePath, askMultiline };
+module.exports = { ask, confirm, confirmOrNumber, selectMenu, selectList, askFilePath, askMultiline };
