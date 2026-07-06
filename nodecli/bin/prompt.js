@@ -68,13 +68,61 @@ async function selectMenu(title, items, { allowCancel = true } = {}) {
   console.log(`  └${'─'.repeat(60)}`);
   console.log('');
 
+  const max = items.length;
   while (true) {
-    const max = items.length;
     const ans = await ask(`  Chọn [${allowCancel ? '0-' : '1-'}${max}]`);
+
     const n = parseInt(ans, 10);
     if (allowCancel && n === 0) return -1;
     if (n >= 1 && n <= max) return n - 1;
-    console.log(`  Nhập số từ ${allowCancel ? 0 : 1} đến ${max}.`);
+
+    if (ans.includes('@')) {
+      const emailUser = ans.split('@')[0];
+      const emailClean = emailUser.replace(/[^a-zA-Z0-9]/g, '');
+      if (emailClean) {
+        const matches = [];
+        const lower = emailClean.toLowerCase();
+        for (let i = 0; i < max; i++) {
+          if (items[i].label.toLowerCase().includes(lower)) matches.push(i);
+        }
+        if (matches.length === 1) {
+          console.log(`  → Email → [${matches[0] + 1}] ${items[matches[0]].label}`);
+          return matches[0];
+        }
+        if (matches.length > 1) {
+          console.log(`  Email '${ans}' khớp ${matches.length} mục:`);
+          for (const mi of matches) console.log(`    [${mi + 1}] ${items[mi].label}`);
+          console.log('');
+          continue;
+        }
+      }
+    }
+
+    const matches = [];
+    const lower = ans.toLowerCase();
+    for (let i = 0; i < max; i++) {
+      const label = items[i].label.toLowerCase();
+      if (label === lower) { matches.length = 0; matches.push(i); break; }
+      if (label.includes(lower)) matches.push(i);
+    }
+
+    if (matches.length === 1) {
+      console.log(`  → Chọn: [${matches[0] + 1}] ${items[matches[0]].label}`);
+      return matches[0];
+    }
+    if (matches.length > 1) {
+      const showLimit = 20;
+      if (matches.length <= showLimit) {
+        console.log(`  Có ${matches.length} kết quả:`);
+        for (const mi of matches) console.log(`    [${mi + 1}] ${items[mi].label}`);
+      } else {
+        console.log(`  Từ khóa '${ans}' quá ngắn (${matches.length} kết quả). Gõ thêm ký tự.`);
+      }
+      console.log('');
+      continue;
+    }
+
+    console.log(`  Nhập số (${allowCancel ? '0-' : ''}1-${max}) hoặc tên/email.`);
   }
 }
 

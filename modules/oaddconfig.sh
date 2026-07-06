@@ -326,23 +326,92 @@ function oaddconfig() {
     echo ""
 
     local total=$(( ${#org_list[@]} + 1 ))
+    local -a all_owners=("$gh_login" "${org_list[@]}")
     local choice
+    local choice_input
     while true; do
-        read -r -p "  Chọn số thứ tự [1-${total}] (Enter = 1): " choice
-        choice="${choice:-1}"
-        [[ "$choice" =~ ^[0-9]+$ ]] \
-            && (( choice >= 1 && choice <= total )) \
-            && break
-        echo "  Nhập số từ 1 đến ${total}."
+        read -r -p "  Chọn (số / tên / email) [1-${total}] (Enter = 1): " choice_input
+        choice_input="${choice_input:-1}"
+
+        # Trường hợp 1: nhập số
+        if [[ "$choice_input" =~ ^[0-9]+$ ]]; then
+            if (( choice_input >= 1 && choice_input <= total )); then
+                choice=$choice_input
+                break
+            fi
+            echo "  Nhập số từ 1 đến ${total}."
+            continue
+        fi
+
+        # Trường hợp 2: nhập email → lấy username, lọc ký tự đặc biệt, tìm gần nhất
+        if [[ "$choice_input" == *"@"* ]]; then
+            local email_user="${choice_input%%@*}"
+            local email_clean="${email_user//[^a-zA-Z0-9]/}"
+            if [[ -n "$email_clean" ]]; then
+                local -a email_matches=()
+                local i owner
+                for ((i=0; i<total; i++)); do
+                    owner="${all_owners[$i]}"
+                    if [[ "${owner,,}" == *"${email_clean,,}"* ]]; then
+                        email_matches+=($i)
+                    fi
+                done
+                if [[ ${#email_matches[@]} -eq 1 ]]; then
+                    choice=$((email_matches[0] + 1))
+                    echo "  → Email → tài khoản: [$choice] ${all_owners[$((choice-1))]}"
+                    break
+                fi
+                if [[ ${#email_matches[@]} -gt 1 ]]; then
+                    echo "  Email '$choice_input' khớp ${#email_matches[@]} tài khoản:"
+                    for i in "${email_matches[@]}"; do
+                        printf "    [%d] %s\n" "$((i+1))" "${all_owners[$i]}"
+                    done
+                    echo ""
+                    continue
+                fi
+            fi
+        fi
+
+        # Trường hợp 3: tìm chính xác
+        local matched_idx=-1
+        local -a matched_indices=()
+        local i owner
+        for ((i=0; i<total; i++)); do
+            owner="${all_owners[$i]}"
+            if [[ "${owner,,}" == "${choice_input,,}" ]]; then
+                matched_idx=$i
+                break
+            elif [[ "${owner,,}" == *"${choice_input,,}"* ]]; then
+                matched_indices+=($i)
+            fi
+        done
+
+        if (( matched_idx >= 0 )); then
+            choice=$((matched_idx + 1))
+            echo "  → Chọn: [$choice] ${all_owners[$((choice-1))]}"
+            break
+        fi
+
+        if [[ ${#matched_indices[@]} -eq 1 ]]; then
+            choice=$((matched_indices[0] + 1))
+            echo "  → Chọn: [$choice] ${all_owners[$((choice-1))]}"
+            break
+        fi
+
+        if [[ ${#matched_indices[@]} -gt 1 ]]; then
+            echo "  Có ${#matched_indices[@]} kết quả trùng khớp:"
+            for i in "${matched_indices[@]}"; do
+                printf "    [%d] %s\n" "$((i+1))" "${all_owners[$i]}"
+            done
+            echo ""
+            continue
+        fi
+
+        echo "  Không tìm thấy '${choice_input}'. Nhập số (1-${total}) hoặc tên/email."
     done
 
     # Xác định owner được chọn
-    local selected_owner
-    if [[ "$choice" == "1" ]]; then
-        selected_owner="$gh_login"
-    else
-        selected_owner="${org_list[$((choice-2))]}"
-    fi
+    local selected_owner="${all_owners[$((choice-1))]}"
 
     local section_key="github.com/${selected_owner}"
     local token_preview
