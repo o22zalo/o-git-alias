@@ -23,16 +23,11 @@ _O_MODULE_CREATEREMOTE_LOADED=1
 
 # ---------------------------------------------------------------------------
 # HELPER: Đọc .git-o-config → in danh sách section name (mỗi dòng 1 cái)
+# Dùng grep thay vì while-read → nhanh hơn nhiều với 100+ section
 # ---------------------------------------------------------------------------
 function _o_list_config_sections() {
     [[ ! -f "$O_CONFIG_FILE" ]] && return 0
-    local line
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        line="${line%%$'\r'}"                           # strip CR
-        line="${line#"${line%%[![:space:]]*}"}"         # trim leading
-        line="${line%"${line##*[![:space:]]}"}"         # trim trailing
-        [[ "$line" =~ ^\[(.+)\]$ ]] && echo "${BASH_REMATCH[1]}"
-    done < "$O_CONFIG_FILE"
+    grep -oP '^\[\K[^\]]+' "$O_CONFIG_FILE" | tr -d '\r'
 }
 
 # ---------------------------------------------------------------------------
@@ -493,7 +488,7 @@ function ocreateremote() {
     # ─────────────────────────────────────────────────────────────────────────
     echo ""
     echo "  ┌─────────────────────────────────────────────────"
-    echo "  │  git ocreateremote${dry_run:+ (dry-run)}"
+    echo "  │  git ocreateremote$([[ "$dry_run" == "1" ]] && echo " (dry-run)")"
     echo "  └─────────────────────────────────────────────────"
     echo ""
 
@@ -510,24 +505,156 @@ function ocreateremote() {
         return 1
     fi
 
-    echo "  Chọn provider / account:"
+    # ── In danh sách dạng cột ────────────────────────────────────────────────
+    local num_sec=${#sections[@]}
+    echo "  Chọn provider / account ($num_sec tài khoản):"
     echo ""
-    local i
-    for i in "${!sections[@]}"; do
-        local sec="${sections[$i]}"
-        local lbl
-        lbl=$(_o_provider_label "${sec%%/*}")
-        printf "    [%d] %-35s (%s)\n" "$((i+1))" "$sec" "$lbl"
+
+    # Tính số cột dựa trên độ rộng terminal
+    local term_cols
+    term_cols=$(tput cols 2>/dev/null || echo 100)
+    local idx_width=${#num_sec}
+    local col_width=36      # đủ rộng cho "[100] host/owner" với owner ~28 ký tự
+    local name_width=$(( col_width - idx_width - 5 ))
+    local cols=$(( term_cols / col_width ))
+    (( cols < 1 )) && cols=1
+    (( cols > 5 )) && cols=5
+    local rows=$(( (num_sec + cols - 1) / cols ))
+
+    local r c idx item line sec display_name
+    for ((r=0; r<rows; r++)); do
+        line=""
+        for ((c=0; c<cols; c++)); do
+            idx=$((r + c * rows))
+            if (( idx < num_sec )); then
+                sec="${sections[$idx]}"
+                display_name="$sec"
+                # Rút gọn nếu quá dài — cắt ngắn phần owner cuối
+                if (( ${#display_name} > name_width )); then
+                    display_name="${display_name:0:$((name_width-3))}..."
+                fi
+                printf -v item "    [%-${idx_width}d] %-${name_width}s" \
+                    "$((idx+1))" "$display_name"
+                line+="$item"
+            fi
+        done
+        echo "$line"
     done
     echo ""
 
+    # ── Input: số hoặc tên tài khoản (email/username) ───────────────────────
     local choice
+    local choice_input
     while true; do
-        read -r -p "  Số thứ tự [1-${#sections[@]}]: " choice
-        [[ "$choice" =~ ^[0-9]+$ ]] \
-            && (( choice >= 1 && choice <= ${#sections[@]} )) \
-            && break
-        echo "  Nhập số từ 1 đến ${#sections[@]}."
+        read -r -p "  Chọn (số / tên tài khoản) [1-${num_sec}]: " choice_input || { echo "  Hủy." && return 1; }
+
+        # Nhập rỗng → không khớp, nhắc lại
+        [[ -z "$choice_input" ]] && echo "  Nhập số (1-${num_sec}) hoặc gõ tên tài khoản." && continue
+
+        # Trường hợp 1: nhập số
+        if [[ "$choice_input" =~ ^[0-9]+$ ]] && (( choice_input >= 1 && choice_input <= num_sec )); then
+            choice=$choice_input
+            break
+        fi
+
+        # Trường hợp 2: nhập email → lấy username, lọc ký tự đặc biệt, tìm gần nhất
+        if [[ "$choice_input" == *"@"* ]]; then
+            local email_user="${choice_input%%@*}"
+            local email_clean="${email_user//[^a-zA-Z0-9]/}"
+            if [[ -n "$email_clean" ]]; then
+                local -a email_matches=()
+                for ((i=0; i<num_sec; i++)); do
+                    if [[ "${sections[$i],,}" == *"${email_clean,,}"* ]]; then
+                        email_matches+=($i)
+                    fi
+                done
+                if [[ ${#email_matches[@]} -eq 1 ]]; then
+                    choice=$((email_matches[0] + 1))
+                    echo "  → Email → tài khoản: [${choice}] ${sections[$((choice-1))]}"
+                    break
+                fi
+                if [[ ${#email_matches[@]} -gt 1 ]]; then
+                    echo "  Email '$choice_input' khớp ${#email_matches[@]} tài khoản:"
+                    for i in "${email_matches[@]}"; do
+                        printf "    [%d] %s\n" "$((i+1))" "${sections[$i]}"
+                    done
+                    echo ""
+                    continue
+                fi
+            fi
+        fi
+
+        # Trường hợp 3: tìm chính xác owner (phần sau host/)
+        local matched_idx=-1
+        local -a matched_indices=()
+        local i owner
+        for ((i=0; i<num_sec; i++)); do
+            owner="${sections[$i]#*/}"
+            if [[ "${owner,,}" == "${choice_input,,}" ]]; then
+                matched_idx=$i
+                break
+            elif [[ -n "${choice_input}" && "${owner,,}" == *"${choice_input,,}"* ]]; then
+                matched_indices+=($i)
+            fi
+        done
+
+        if (( matched_idx >= 0 )); then
+            choice=$((matched_idx + 1))
+            echo "  → Chọn: [${choice}] ${sections[$((choice-1))]}"
+            break
+        fi
+
+        if [[ ${#matched_indices[@]} -eq 1 ]]; then
+            choice=$((matched_indices[0] + 1))
+            echo "  → Chọn: [${choice}] ${sections[$((choice-1))]}"
+            break
+        fi
+
+        if [[ ${#matched_indices[@]} -gt 1 ]]; then
+            local show_limit=20
+            if [[ ${#matched_indices[@]} -le $show_limit ]]; then
+                echo "  Có ${#matched_indices[@]} kết quả trùng khớp:"
+                for i in "${matched_indices[@]}"; do
+                    printf "    [%d] %s\n" "$((i+1))" "${sections[$i]}"
+                done
+            else
+                echo "  Từ khóa '${choice_input}' quá ngắn (${#matched_indices[@]} kết quả)."
+                echo "  Gõ thêm ký tự để thu hẹp, hoặc nhập số (1-${num_sec})."
+            fi
+            echo ""
+            continue
+        fi
+
+        # Trường hợp 4: tìm trong toàn bộ section (host/owner)
+        matched_indices=()
+        for ((i=0; i<num_sec; i++)); do
+            if [[ "${sections[$i],,}" == *"${choice_input,,}"* ]]; then
+                matched_indices+=($i)
+            fi
+        done
+
+        if [[ ${#matched_indices[@]} -eq 1 ]]; then
+            choice=$((matched_indices[0] + 1))
+            echo "  → Chọn: [${choice}] ${sections[$((choice-1))]}"
+            break
+        fi
+
+        if [[ ${#matched_indices[@]} -gt 1 ]]; then
+            local show_limit=20
+            if [[ ${#matched_indices[@]} -le $show_limit ]]; then
+                echo "  Có ${#matched_indices[@]} kết quả trùng khớp:"
+                for i in "${matched_indices[@]}"; do
+                    printf "    [%d] %s\n" "$((i+1))" "${sections[$i]}"
+                done
+            else
+                echo "  Từ khóa '${choice_input}' quá ngắn (${#matched_indices[@]} kết quả)."
+                echo "  Gõ thêm ký tự để thu hẹp, hoặc nhập số (1-${num_sec})."
+            fi
+            echo ""
+            continue
+        fi
+
+        echo "  Không tìm thấy '${choice_input}'. Nhập số (1-${num_sec}) hoặc tên tài khoản."
     done
 
     local selected="${sections[$((choice-1))]}"
