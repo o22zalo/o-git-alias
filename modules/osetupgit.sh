@@ -181,6 +181,10 @@ EOF
     [[ -f "$template_file" ]] || touch "$template_file"
     echo "  ✓ Đã đảm bảo có file: ${template_file}"
 
+    echo "  → Cài commit.template cho VS Code ..."
+    git config commit.template "$template_file"
+    echo "    ✓ commit.template = ${template_file}"
+
     echo ""
     echo "  ✓ Hoàn tất. Cách dùng:"
     echo "    1. Ghi nội dung công việc vào : ${template_file}"
@@ -225,10 +229,12 @@ function osetupgit() {
     echo ""
 
     local choice
-    read -r -p "  Chọn hạng mục [0-${max}/a]: " choice
+    read -r -p "  Chọn hạng mục [0-${max}/a] (Enter=all): " choice
     choice="${choice,,}"
 
-    if [[ -z "$choice" || "$choice" == "0" ]]; then
+    [[ -z "$choice" ]] && choice="a"
+
+    if [[ "$choice" == "0" ]]; then
         echo "  Hủy."
         echo ""
         return 0
