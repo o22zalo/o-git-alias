@@ -46,6 +46,7 @@ function _oe_print_menu() {
     echo "  │  19   git ozip                git oz     download source ZIP từ remote branch"
     echo "  │  20   git odeletebranch       git odb    fetch remote, delete remote branch"
     echo "  │  21   git oaddconfig          git oadc   add config"
+    echo "  │  22   git setupgit            git osg    menu cài đặt repo (hook commit message, ...)"
     echo "  │"
     echo "  │   0   Thoát"
     echo "  │"
@@ -191,6 +192,11 @@ function _oe_run() {
             echo ""
             oaddconfig
             ;;
+        22)
+            echo "  → git setupgit"
+            echo ""
+            osetupgit
+            ;;
         0)
             echo "  Thoát."
             return 0
@@ -214,12 +220,12 @@ function oexecute() {
     while true; do
         _oe_print_menu
 
-        read -r -p "  Chọn số thứ tự [0-21]: " choice
+        read -r -p "  Chọn số thứ tự [0-22]: " choice
 
         # Validate input
-        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 21 )); then
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 22 )); then
             echo ""
-            echo "  ⚠ Nhập số từ 0 đến 21."
+            echo "  ⚠ Nhập số từ 0 đến 22."
             sleep 1
             continue
         fi

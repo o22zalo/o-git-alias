@@ -54,6 +54,7 @@ $Aliases = @(
     @("ozip", "ozip"),
     @("odeletebranch", "odeletebranch"),
     @("oaddconfig", "oaddconfig"),
+    @("setupgit", "osetupgit"),
     # Viết tắt (trỏ cùng hàm)
     @("oe", "oexecute"),
     @("oac", "oaddcommit"),
@@ -75,6 +76,7 @@ $Aliases = @(
     @("oz", "ozip"),
     @("odb", "odeletebranch"),
     @("oadc", "oaddconfig"),
+    @("osg", "osetupgit"),
     @("getremoteurl", "get_remote_url")
 )
 $Count = 0
@@ -126,7 +128,8 @@ Write-Host "    addfile omessage"
 Write-Host "    addfile ogitignore"
 Write-Host "  git ozip             git oz    ← download source ZIP"
 Write-Host "  git odeletebranch    git odb   ← xoa remote branch"
-Write-Host "  git oaddconfig       git oadc  ← MOI: them GitHub token vao .git-o-config"
+Write-Host "  git oaddconfig       git oadc  ← them GitHub token vao .git-o-config"
+Write-Host "  git setupgit         git osg   ← MOI: menu cai dat repo (hook commit message, ...)"
 Write-Host ""
 Write-Host " Kiem tra : git config --global --list"
 Write-Host " Thu ngay : git oe"
