@@ -53,6 +53,8 @@
 #   git config --global alias.getremoteurls  "!source \"$SCRIPT\" && get_remote_urls"
 #   git config --global alias.setupgit       "!source \"$SCRIPT\" && osetupgit"
 #   git config --global alias.osg            "!source \"$SCRIPT\" && osetupgit"
+#   git config --global alias.opullmanual    "!source \"$SCRIPT\" && opullmanual"
+#   git config --global alias.oplm           "!source \"$SCRIPT\" && opullmanual"
 #
 # =============================================================================
 
@@ -124,6 +126,7 @@ function o() {
     echo "  git setupgit          git osg    menu cài đặt cho repo (hook, ...) — mở rộng được"
     echo "  git ocredential       git ocred  lấy credential theo username hoặc Git URL"
     echo "  git getremoteurls               lấy danh sách o.url, o.url0..o.url9"
+    echo "  git opullmanual       git oplm   pull từ một remote URL được chọn"
     echo ""
     echo "  Windows npm scripts:"
     echo "    Muốn tạo package.json: git addfile packagejson"
@@ -807,6 +810,9 @@ _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
 
 [[ -f "${_O_MODULES_DIR}/osetupgit.sh" ]] \
     && source "${_O_MODULES_DIR}/osetupgit.sh"
+
+[[ -f "${_O_MODULES_DIR}/opullmanual.sh" ]] \
+    && source "${_O_MODULES_DIR}/opullmanual.sh"
 
 # =============================================================================
 # (Thêm module mới phía dưới theo cùng pattern)

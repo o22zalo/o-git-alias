@@ -21,6 +21,7 @@ modules/
   oaddfile.sh             # Module tạo file helper (.gitignore, .opushforce.message)
   opushforceurl.sh        # Module force push lên một remote URL được chọn
   opullbranch.sh          # Module fetch remote, chọn branch rồi lấy nội dung về working tree
+  opullmanual.sh          # Module chọn remote URL rồi pull về
   oexecute.sh             # Module menu tương tác chọn & chạy lệnh
 ```
 
@@ -85,6 +86,7 @@ Windows 11. Sau khi cập nhật repository, không cần đăng ký lại alias
 | `git addfile <sub>`       | Tạo file helper cho repo                                           |
 | `git ocredential <input>` | Lấy token/header theo username hoặc Git URL để dùng trong lệnh khác |
 | `git getremoteurls`        | Lấy danh sách `o.url`, `o.url0`…`o.url9` theo line hoặc JSON       |
+| `git opullmanual`         | Chọn một remote URL → pull từ đúng URL đó                          |
 
 ### Lấy credential
 
@@ -169,6 +171,7 @@ Khi đồng bộ `package.json`, script sẽ:
 | `git ocr`    | `git ocreateremote` |
 | `git af`     | `git addfile`       |
 | `git ocred`  | `git ocredential`   |
+| `git oplm`   | `git opullmanual`   |
 
 ---
 
@@ -192,6 +195,7 @@ Ví dụ:
 npm run git-addfile-packagejson
 npm run git-opushforce
 npm run git-opushforceurl
+npm run git-opullmanual
 npm run git-oaddcommit
 npm run git-addfile-omessage
 ```
@@ -211,6 +215,7 @@ git-oexecute
 git-oaddcommit
 git-oclone
 git-opull
+git-opullmanual
 git-opullbranch
 git-opush
 git-opushforce
@@ -226,6 +231,7 @@ git-addfile
 git-addfile-packagejson
 git-addfile-omessage
 git-addfile-ogitignore
+git-oaddconfig
 ```
 
 ---
@@ -343,6 +349,24 @@ git oplb
 ```
 
 Remote tạm được tạo trong quá trình fetch và **tự xóa sau khi hoàn thành** — không làm ô nhiễm cấu hình git của repo.
+
+---
+
+## Pull từ một remote cụ thể (`opullmanual`)
+
+Dùng khi bạn có nhiều remote URL trong repo và muốn **chọn một remote cụ thể để pull về** thay vì mặc định lấy `o.url`.
+
+```bash
+git opullmanual
+# hoặc viết tắt
+git oplm
+```
+
+**Flow tương tác:**
+
+1. Liệt kê danh sách tất cả remote URLs (`o.url`, `o.url0`..`o.url9`) từ cấu hình `.git/config`
+2. Nhập số thứ tự để chọn remote URL
+3. Tự động xử lý xác thực (token / header) và thực hiện `git pull` từ URL đã chọn
 
 ---
 

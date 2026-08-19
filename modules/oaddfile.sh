@@ -356,6 +356,8 @@ git-addfile	git addfile
 git-addfile-packagejson	git addfile packagejson
 git-addfile-omessage	git addfile omessage
 git-addfile-ogitignore	git addfile ogitignore
+git-oaddconfig	git oaddconfig
+git-opullmanual	git opullmanual
 EOF
 }
 
@@ -370,6 +372,7 @@ git-oac	git oac
 git-ocl	git ocl
 git-opl	git opl
 git-oplb	git oplb
+git-oplm	git oplm
 git-ops	git ops
 git-opf	git opf
 git-opfurl	git opfurl
@@ -383,6 +386,7 @@ git-ocr	git ocr
 git-af	git af
 git-af-omessage	git af omessage
 git-af-ogitignore	git af ogitignore
+git-oadc	git oadc
 EOF
 }
 

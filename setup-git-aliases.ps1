@@ -81,7 +81,9 @@ $Aliases = @(
     # Lệnh mới luôn thêm cuối để giữ nguyên thứ tự quen dùng
     @("ocredential", "ocredential"),
     @("ocred", "ocredential"),
-    @("getremoteurls", "get_remote_urls")
+    @("getremoteurls", "get_remote_urls"),
+    @("opullmanual", "opullmanual"),
+    @("oplm", "opullmanual")
 )
 $Count = 0
 
@@ -136,6 +138,7 @@ Write-Host "  git oaddconfig       git oadc  ← them GitHub token vao .git-o-co
 Write-Host "  git setupgit         git osg   ← MOI: menu cai dat repo (hook commit message, ...)"
 Write-Host "  git ocredential      git ocred ← lay credential theo username hoac URL"
 Write-Host "  git getremoteurls              ← lay danh sach o.url theo line hoac JSON"
+Write-Host "  git opullmanual      git oplm  ← chon remote URL de pull"
 Write-Host ""
 Write-Host " Kiem tra : git config --global --list"
 Write-Host " Thu ngay : git oe"
