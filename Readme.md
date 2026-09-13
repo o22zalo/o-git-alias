@@ -22,6 +22,7 @@ modules/
   opushforceurl.sh        # Module force push lên một remote URL được chọn
   opullbranch.sh          # Module fetch remote, chọn branch rồi lấy nội dung về working tree
   opullmanual.sh          # Module chọn remote URL rồi pull về
+  ocloneall.sh            # Module clone hàng loạt repo của Org hoặc Cá nhân
   oexecute.sh             # Module menu tương tác chọn & chạy lệnh
 ```
 
@@ -87,6 +88,8 @@ Windows 11. Sau khi cập nhật repository, không cần đăng ký lại alias
 | `git ocredential <input>` | Lấy token/header theo username hoặc Git URL để dùng trong lệnh khác |
 | `git getremoteurls`        | Lấy danh sách `o.url`, `o.url0`…`o.url9` theo line hoặc JSON       |
 | `git opullmanual`         | Chọn một remote URL → pull từ đúng URL đó                          |
+| `git ocloneall`           | Clone tất cả repo của một Org hoặc Cá nhân (có chọn lọc / skip đã có) |
+| `git ocla`                | Viết tắt của `git ocloneall`                                         |
 
 ### Lấy credential
 
@@ -172,6 +175,7 @@ Khi đồng bộ `package.json`, script sẽ:
 | `git af`     | `git addfile`       |
 | `git ocred`  | `git ocredential`   |
 | `git oplm`   | `git opullmanual`   |
+| `git ocla`   | `git ocloneall`     |
 
 ---
 
@@ -522,6 +526,31 @@ Nếu bỏ trống URL, dùng placeholder — cập nhật sau:
 git oinit
 git config o.url https://github.com/myorg/myrepo.git
 ```
+
+---
+
+## Clone hàng loạt repo với `ocloneall` (`ocla`)
+
+Lệnh interactive wizard hỗ trợ clone nhiều hoặc tất cả repo của một Organization hoặc Cá nhân:
+
+```bash
+git ocloneall
+# hoặc viết tắt
+git ocla
+```
+
+Quy trình wizard:
+1. **Chọn tài khoản**: Lấy từ danh sách tài khoản cấu hình trong `.git-o-config` (hỗ trợ nhập số hoặc tìm kiếm theo username/email).
+2. **Chọn phạm vi**: Tự động gọi API liệt kê tài khoản cá nhân và các Organization mà tài khoản đó có quyền truy cập (hoặc tự gõ thủ công).
+3. **Lấy danh sách repository**: Gọi API phân trang để lấy toàn bộ repo (hỗ trợ GitHub, GitLab, Gitea, Forgejo, Azure DevOps).
+4. **Kiểm tra & lựa chọn**:
+   - Tự động kiểm tra repo đã tồn tại ở thư mục cục bộ chưa (đánh dấu `[Đã có sẵn]` / `[Chưa có]`).
+   - Tùy chọn `[A]` (mặc định - chỉ cần Enter): Clone **TẤT CẢ** các repo chưa có, tự động bỏ qua các repo đã có sẵn.
+   - Hoặc nhập danh sách số repo cần clone (ví dụ: `1,3,5` hoặc `1-10`).
+5. **Clone & Cấu hình repo**:
+   - Clone tự động kèm auth tương ứng từ `.git-o-config`.
+   - Cấu hình repo bên trong giống `oinit` (`o.url`, `user.name`, `user.email`, `core.autocrlf false`, `core.filemode false`, `core.ignorecase true`).
+   - **Đặc biệt**: Không tạo file `.gitignore` và không tạo file `.opushforce.message`.
 
 ---
 

@@ -55,6 +55,8 @@
 #   git config --global alias.osg            "!source \"$SCRIPT\" && osetupgit"
 #   git config --global alias.opullmanual    "!source \"$SCRIPT\" && opullmanual"
 #   git config --global alias.oplm           "!source \"$SCRIPT\" && opullmanual"
+#   git config --global alias.ocloneall      "!source \"$SCRIPT\" && ocloneall"
+#   git config --global alias.ocla           "!source \"$SCRIPT\" && ocloneall"
 #
 # =============================================================================
 
@@ -127,6 +129,7 @@ function o() {
     echo "  git ocredential       git ocred  lấy credential theo username hoặc Git URL"
     echo "  git getremoteurls               lấy danh sách o.url, o.url0..o.url9"
     echo "  git opullmanual       git oplm   pull từ một remote URL được chọn"
+    echo "  git ocloneall         git ocla   clone tất cả repo của org / cá nhân"
     echo ""
     echo "  Windows npm scripts:"
     echo "    Muốn tạo package.json: git addfile packagejson"
@@ -590,7 +593,23 @@ function opull() {
 
 function opush() {
     local url; url=$(_o_get_url) || return 1
-    _o_run_git "$url" push --quiet main
+    _o_resolve_auth "$url"
+
+    case "$O_AUTH_TYPE" in
+        token)
+            local auth_url
+            auth_url=$(_o_embed_token "$url" "$O_AUTH_TOKEN" "$O_AUTH_USER")
+            echo "[o-auth] token @ [$O_AUTH_MATCH]" >&2
+            git push --quiet "$auth_url" main
+            ;;
+        header)
+            echo "[o-auth] header @ [$O_AUTH_MATCH]" >&2
+            git -c "http.extraHeader=${O_AUTH_HEADER}" push --quiet "$url" main
+            ;;
+        none|*)
+            git push --quiet "$url" main
+            ;;
+    esac
     echo "[opush] Done: $url"
 }
 
@@ -626,6 +645,20 @@ function oclone() {
             git clone "$url" ${dest:+"$dest"}
             ;;
     esac
+
+    # Làm sạch remote.origin.url và set o.url để không lưu token vào .git/config
+    local target_dir="${dest:-}"
+    if [[ -z "$target_dir" ]]; then
+        local raw_name="${url##*/}"
+        target_dir="${raw_name%.git}"
+    fi
+    if [[ -d "$target_dir/.git" ]]; then
+        (
+            cd "$target_dir" || exit 1
+            git config remote.origin.url "$url"
+            git config o.url "$url"
+        )
+    fi
 }
 
 function opushforce() {
@@ -813,6 +846,9 @@ _O_MODULES_DIR="${_O_SCRIPT_DIR}/modules"
 
 [[ -f "${_O_MODULES_DIR}/opullmanual.sh" ]] \
     && source "${_O_MODULES_DIR}/opullmanual.sh"
+
+[[ -f "${_O_MODULES_DIR}/ocloneall.sh" ]] \
+    && source "${_O_MODULES_DIR}/ocloneall.sh"
 
 # =============================================================================
 # (Thêm module mới phía dưới theo cùng pattern)

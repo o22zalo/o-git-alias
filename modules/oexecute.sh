@@ -54,6 +54,7 @@ function _oe_print_menu() {
     echo "  │  23   git ocredential         git ocred  lấy credential theo username hoặc Git URL"
     echo "  │  24   git getremoteurls                  lấy danh sách URL theo line hoặc JSON"
     echo "  │  25   git opullmanual         git oplm   chọn remote URL để pull"
+    echo "  │  26   git ocloneall           git ocla   clone tất cả repo của org / cá nhân"
     echo "  │"
     echo "  │   0   Thoát"
     echo "  │"
@@ -101,6 +102,7 @@ function _oe_command_name() {
         23) echo "git ocredential" ;;
         24) echo "git getremoteurls" ;;
         25) echo "git opullmanual" ;;
+        26) echo "git ocloneall" ;;
         *)  echo "lệnh không xác định" ;;
     esac
 }
@@ -258,6 +260,11 @@ function _oe_run() {
             echo ""
             opullmanual
             ;;
+        26)
+            echo "  → git ocloneall"
+            echo ""
+            ocloneall
+            ;;
         0)
             echo "  Thoát."
             return 0
@@ -281,12 +288,12 @@ function oexecute() {
     while true; do
         _oe_print_menu
 
-        read -r -p "  Chọn số thứ tự [0-25]: " choice
+        read -r -p "  Chọn số thứ tự [0-26]: " choice
 
         # Validate input
-        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 25 )); then
+        if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 0 || choice > 26 )); then
             echo ""
-            echo "  ⚠ Nhập số từ 0 đến 25."
+            echo "  ⚠ Nhập số từ 0 đến 26."
             sleep 1
             continue
         fi

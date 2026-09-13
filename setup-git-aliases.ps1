@@ -83,7 +83,9 @@ $Aliases = @(
     @("ocred", "ocredential"),
     @("getremoteurls", "get_remote_urls"),
     @("opullmanual", "opullmanual"),
-    @("oplm", "opullmanual")
+    @("oplm", "opullmanual"),
+    @("ocloneall", "ocloneall"),
+    @("ocla", "ocloneall")
 )
 $Count = 0
 
